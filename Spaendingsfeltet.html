@@ -95,6 +95,15 @@ h1 .bolt{display:inline-block;width:.7em;vertical-align:-.05em}
 .btn.ghost{background:transparent;color:var(--text);border:2px solid var(--line);font-family:var(--f-body);font-weight:700}
 .btn:hover{filter:brightness(1.1)}
 
+#after{display:flex;flex-direction:column;gap:16px}
+#after:empty{display:none}
+.steal{border:2px solid var(--c);border-radius:14px;padding:16px 20px;display:flex;flex-direction:column;gap:12px;background:color-mix(in srgb,var(--c) 12%,transparent);animation:pop .35s cubic-bezier(.2,1.4,.4,1) .9s both}
+.steal p{margin:0;font-size:clamp(16px,1.9vw,22px);line-height:1.4}
+.steal b{color:var(--c)}
+.btn.steal-go{background:var(--c);color:var(--ink)}
+.deltas{display:flex;flex-direction:column;gap:2px}
+.deltas .delta{font-size:22px}
+
 /* Kvit eller dobbelt */
 .kd-title{font-family:var(--f-display);color:var(--hard);font-size:clamp(28px,5vw,56px);margin:0;line-height:1.05;text-wrap:balance}
 .kd{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -300,21 +309,49 @@ function askQuestion(ci,r,q,v,mode){
    <p class="q">${q[0]}</p>
    <div class="opts">${opts.map((o,i)=>`<button class="opt" data-i="${i}"><span class="l">${"ABCD"[i]}</span><span>${o.t}</span></button>`).join("")}</div>
    <div id="after"></div>`,mode!=="normal");
-  card.querySelectorAll(".opt").forEach(btn=>btn.onclick=()=>{
+  const other=team==="p"?"d":"p",key=ci+"-"+r;
+  const col=k=>k==="p"?"var(--girls)":"var(--boys)";
+  const opt=[...card.querySelectorAll(".opt")];
+  const bumpS=k=>{const e=$("score-"+k);e.textContent=S.scores[k];e.classList.remove("bump");void e.offsetWidth;e.classList.add("bump")};
+  const delta=(k,p)=>`<span class="delta ${p>0?"plus":p<0?"minus":"zero"}">${p>0?"+":""}${p} til ${NAMES[k]}</span>`;
+  const reveal=()=>opt.forEach((b,j)=>{b.disabled=true;if(opts[j].ok)b.classList.add("right");else if(!b.classList.contains("wrong"))b.classList.add("fade")});
+  const end=(ok,deltas)=>{
+    reveal();
+    $("after").innerHTML=`<p class="explain"><b>${ok?"Rigtigt!":"Det rigtige svar er: "+q[1][0]+"."}</b> ${q[2]}</p>
+      <div class="row" style="align-items:center;justify-content:space-between"><span class="deltas">${deltas.join("")}</span><button class="btn" id="next">Fortsæt</button></div>`;
+    $("next").onclick=next;$("next").focus();save();
+  };
+  let phase="first",firstPts=0;
+  opt.forEach(btn=>btn.onclick=()=>{
     const i=+btn.dataset.i,ok=opts[i].ok;
-    card.querySelectorAll(".opt").forEach((b,j)=>{b.disabled=true;if(opts[j].ok)b.classList.add("right");else if(j===i)b.classList.add("wrong");else b.classList.add("fade")});
-    const pts=ok?win:lose;
-    S.scores[team]+=pts;
-    S.done[ci+"-"+r]={who:ok?team:null,pts};
-    if(!ok&&pts<0)S.done[ci+"-"+r]={who:team,pts};
-    $("score-"+team).textContent=S.scores[team];
-    $("score-"+team).classList.remove("bump");void $("score-"+team).offsetWidth;$("score-"+team).classList.add("bump");
-    react(ok);
-    const dc=pts>0?"plus":pts<0?"minus":"zero";
-    $("after").outerHTML=`<p class="explain"><b>${ok?"Rigtigt!":"Det rigtige svar er: "+q[1][0]+"."}</b> ${q[2]}</p>
-      <div class="row" style="align-items:center;justify-content:space-between"><span class="delta ${dc}">${pts>0?"+":""}${pts} til ${NAMES[team]}</span><button class="btn" id="next">Fortsæt</button></div>`;
-    $("next").onclick=next;
-    save();
+    if(phase==="first"){
+      const pts=ok?win:lose;firstPts=pts;
+      S.scores[team]+=pts;bumpS(team);
+      S.done[key]={who:(ok||pts<0)?team:null,pts};
+      react(ok);
+      if(ok){end(true,[delta(team,pts)]);return}
+      btn.classList.add("wrong");opt.forEach(b=>b.disabled=true);phase="wait";
+      $("after").innerHTML=`<div class="steal" style="--c:${col(other)}">
+        <p><b>${NAMES[other]}</b> kan byde ind og få <b>${v} point</b> for det rigtige svar. Svarer de forkert, mister de ingenting.</p>
+        <div class="row"><button class="btn ghost" id="skip">Spring over</button><button class="btn steal-go" id="steal">${NAMES[other]} byder ind</button></div></div>`;
+      save();
+      $("skip").onclick=()=>end(false,[delta(team,firstPts)]);
+      $("steal").onclick=()=>{
+        phase="steal";blip(660);
+        const a=card.querySelector(".meta .ans");a.style.setProperty("--c",col(other));a.textContent=NAMES[other]+" byder ind";
+        $("after").innerHTML=`<p class="explain" style="color:${col(other)}"><b style="color:inherit">${NAMES[other]}</b> vælger blandt de resterende svar.</p>`;
+        opt.forEach(b=>{if(!b.classList.contains("wrong"))b.disabled=false});
+        opt.find(b=>!b.disabled)?.focus();
+      };
+      return;
+    }
+    if(phase==="steal"){
+      phase="over";
+      if(ok){S.scores[other]+=v;bumpS(other);S.done[key]={who:other,pts:v}}
+      else btn.classList.add("wrong");
+      react(ok);
+      end(ok,[delta(team,firstPts),ok?delta(other,v):delta(other,0)]);
+    }
   });
 }
 
