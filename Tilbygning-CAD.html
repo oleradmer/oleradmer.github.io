@@ -387,21 +387,26 @@ function fmtKote(z){const v=Math.abs(z/1000).toFixed(2).replace('.',',');return 
    GEOMETRI: vægge med hjørnesamling, åbninger, rum
    ==================================================================== */
 function wpt(g,s,d){return{x:g.w.a.x+g.u.x*s+g.n.x*d,y:g.w.a.y+g.u.y*s+g.n.y*d};}
+/* samlinger regnes kun, når vinklen er tydelig; flade vinkler (< ca. 12°) er overlap, ikke hjørner */
+const JOINT_SIN=0.2,FOLD_COS=0.978;
+const awayDir=(g,end)=>end==='a'?g.u:V.mul(g.u,-1);
 function joint(g,end,gs){
-  const P0=g.w[end],Q=g.w[end==='a'?'b':'a'];let best=null,bs=-1;
-  for(const h of gs){if(h===g)continue;for(const e2 of ['a','b']){if(V.dist(h.w[e2],P0)<1.5){const s=Math.abs(V.cross(g.u,h.u));if(s>bs){bs=s;best={mode:'miter',h,e2};}}}}
+  const P0=g.w[end],Q=g.w[end==='a'?'b':'a'],dg=awayDir(g,end);let best=null,bs=-1;
+  for(const h of gs){if(h===g)continue;for(const e2 of ['a','b']){if(V.dist(h.w[e2],P0)<1.5){if(V.dot(dg,awayDir(h,e2))>FOLD_COS)continue;const s=Math.abs(V.cross(g.u,h.u));if(s>bs){bs=s;best={mode:'miter',h,e2};}}}}
   if(best)return best;
-  for(const h of gs){if(h===g)continue;if(Math.abs(V.cross(g.u,h.u))<0.02)continue;const rel=V.sub(P0,h.w.a),r=V.dot(rel,h.u),pd=V.dot(rel,h.n);
+  for(const h of gs){if(h===g)continue;if(Math.abs(V.cross(g.u,h.u))<JOINT_SIN)continue;const rel=V.sub(P0,h.w.a),r=V.dot(rel,h.u),pd=V.dot(rel,h.n);
     if(r>1&&r<h.L-1&&Math.abs(pd)<=h.t/2+1.5){const side=Math.sign(V.dot(V.sub(Q,h.w.a),h.n))||1;return{mode:'tee',h,side};}}
   return{mode:'free'};
 }
 function endPts(g,end){
-  const J=g.ends[end],P0=g.w[end],out=[];
+  const J=g.ends[end],P0=g.w[end],out=[];let miss=false;
   for(const d of g.offs){const base=V.add(P0,V.mul(g.n,d));let X=null;
     if(J.mode==='miter'){const h=J.h,f=((end==='b')!==(J.e2==='b'))?1:-1,dd=clamp(f*d,-h.t/2,h.t/2);
       if(Math.abs(V.cross(g.u,h.u))>0.02){X=lineX(base,g.u,V.add(P0,V.mul(h.n,dd)),h.u);if(X&&V.dist(X,P0)>4*Math.max(g.t,h.t))X=null;}}
     else if(J.mode==='tee'){const h=J.h,F0=V.add(h.w.a,V.mul(h.n,J.side*h.t/2));X=lineX(base,g.u,F0,h.u);if(X&&V.dist(X,P0)>4*Math.max(g.t,h.t))X=null;}
-    out.push(X||base);}
+    out.push(X||base);if(!X&&J.mode!=='free')miss=true;}
+  /* alle lag eller ingen: blandede snit gav skæve vægender */
+  if(miss){const flat=J.mode==='miter'&&Math.abs(V.cross(g.u,J.h.u))<=0.02;for(let i=0;i<g.offs.length;i++)out[i]=V.add(P0,V.mul(g.n,g.offs[i]));if(!flat){g.ends[end]={mode:'free'};return out;}}
   if(J.mode==='tee'){const h=J.h,r0=V.dot(V.sub(out[0],h.w.a),h.u),r1=V.dot(V.sub(out[out.length-1],h.w.a),h.u);(J.side>0?h.gapL:h.gapR).push([Math.min(r0,r1),Math.max(r0,r1)]);}
   return out;
 }
@@ -498,8 +503,8 @@ function healGaps(tol=25){let n=0,maxGap=0;
   for(let iter=0;iter<60;iter++){const G=geo();let best=null;
     for(const g of G.walls){if(!editable(g.w))continue;for(const end of ['a','b']){if(g.ends[end].mode!=='free')continue;const P0=g.w[end];
       for(const h of G.walls){if(h===g)continue;
-        for(const e2 of ['a','b']){const d=V.dist(h.w[e2],P0);if(d>0.05&&d<=tol&&(!best||d<best.d))best={g,end,d,to:{...h.w[e2]}};}
-        if(Math.abs(V.cross(g.u,h.u))>0.02){const rel=V.sub(P0,h.w.a),r=V.dot(rel,h.u),pd=V.dot(rel,h.n),gap=Math.abs(pd)-h.t/2;
+        for(const e2 of ['a','b']){const d=V.dist(h.w[e2],P0);if(d>0.05&&d<=tol&&V.dot(awayDir(g,end),awayDir(h,e2))<=FOLD_COS&&(!best||d<best.d))best={g,end,d,to:{...h.w[e2]}};}
+        if(Math.abs(V.cross(g.u,h.u))>JOINT_SIN){const rel=V.sub(P0,h.w.a),r=V.dot(rel,h.u),pd=V.dot(rel,h.n),gap=Math.abs(pd)-h.t/2;
           if(r>1&&r<h.L-1&&gap>0&&gap<=tol&&(!best||gap<best.d))best={g,end,d:gap,to:V.add(V.add(h.w.a,V.mul(h.u,r)),V.mul(h.n,Math.sign(pd)*h.t/2))};}}}}
     if(!best)break;best.g.w[best.end]={x:Math.round(best.to.x*10)/10,y:Math.round(best.to.y*10)/10};n++;maxGap=Math.max(maxGap,best.d);touch();}
   return{n,maxGap};}
@@ -514,6 +519,13 @@ function orientWalls(ids){const G=geo();const Gr=G.graph||(G.graph=buildGraph(G.
     /* g.n-siden har bands[0]; uden vending er det det yderste lag */
     if(want!==null){const flipNeeded=inA&&!inB?true:false;if(!!g.w.flip!==flipNeeded){g.w.flip=flipNeeded;n++;}}}
   if(n)touch();return n;}
+let OVV=-1,OVL=[];
+function wallOverlaps(){if(OVV===MV)return OVL;OVV=MV;const W=geo().walls,out=[];
+  for(let i=0;i<W.length;i++)for(let j=i+1;j<W.length;j++){const g=W[i],h=W[j];if(Math.abs(V.cross(g.u,h.u))>JOINT_SIN)continue;
+    const r0=V.dot(V.sub(h.w.a,g.w.a),g.u),r1=V.dot(V.sub(h.w.b,g.w.a),g.u),lo=Math.max(0,Math.min(r0,r1)),hi=Math.min(g.L,Math.max(r0,r1));if(hi-lo<150)continue;
+    const lim=(g.t+h.t)/2-5;let hit=0;for(let k=0;k<=8;k++){const r=lo+(hi-lo)*k/8,t=(r-r0)/((r1-r0)||1),ph=V.lerp(h.w.a,h.w.b,t);if(Math.abs(V.dot(V.sub(ph,g.w.a),g.n))<lim)hit++;}
+    if(hit>=2)out.push([g.w.id,h.w.id]);}
+  return OVL=out;}
 let GEO=null,GEOV=-1;
 function geo(){if(GEOV!==MV){GEO=computeGeo();GEOV=MV;}return GEO;}
 function openingLimits(og){const g=og.g,l=g.offs.length-1;const lo=Math.max(g.sA[0],g.sA[l]),hi=Math.min(g.sB[0],g.sB[l]);return{lo,hi,dA:og.s0-lo,dB:hi-og.s1};}
@@ -1176,7 +1188,7 @@ function snapGeo(){if(SGV===MV)return SG;const G=geo(),pts=[],segs=[];
 function snapAt(sp,opt={}){
   const w=s2w(sp),tol=11/view.zoom,sn=PREF.snaps,from=opt.from||null,ex=opt.exclude||null;
   if(opt.raw)return{p:w,kind:'free'};
-  const SGx=snapGeo();let best=null;
+  const SGx=S.alt?{pts:[],segs:[]}:snapGeo();let best=null;
   const consider=(p,kind,ref,pri)=>{const d=V.dist(p,w);if(d<tol){const sc=d/tol+pri;if(!best||sc<best.score)best={p:{x:p.x,y:p.y},kind,ref:ref||null,score:sc};}};
   for(const pt of SGx.pts){if(ex&&ex.has(pt.id))continue;if(!sn[pt.cat])continue;consider(pt.p,pt.kind,pt.ref,pt.pri);}
   const near=SGx.segs.filter(s=>!(ex&&ex.has(s.id))&&distPtSeg(w,s.a,s.b).d<tol);
@@ -1230,6 +1242,7 @@ function drawOverlay(){
   const selBad=[...S.sel].some(id=>{const o=objById(id);return o&&o.type==='room'&&geo().rooms.get(id)&&!geo().rooms.get(id).ok;});
   if(S.tool==='room'||selBad){ctx.setTransform(dpr,0,0,dpr,0,0);ctx.strokeStyle=PAL.bad;ctx.lineWidth=2;for(const pt of freeEnds()){const q=w2s(pt);ctx.beginPath();ctx.arc(q.x,q.y,10,0,2*PI);ctx.stroke();}}ctx.save();worldT();
   if(S.tool==='select'&&S.hover&&!S.sel.has(S.hover)&&!S.drag){const o=objById(S.hover);if(o){ctx.globalAlpha=0.5;strokeShapes(hlShapes(o),acc,1.5,null);ctx.globalAlpha=1;}}
+  {const ov=new Set(wallOverlaps().flat());if(ov.size){ctx.setLineDash([6/view.zoom,4/view.zoom]);for(const id of ov){const o=objById(id);if(o)strokeShapes(hlShapes(o),PAL.bad,2,null);}ctx.setLineDash([]);}}
   for(const id of S.sel){const o=objById(id);if(o)strokeShapes(hlShapes(o),acc,2,'rgba(35,80,196,0.08)');}
   toolPreview();ctx.restore();
   ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -1280,6 +1293,7 @@ function toolPoint(p,sr){
   const t=S.tool,last=lastPt();
   switch(t){
     case'wall':if(last&&V.dist(last,p)>1){const w=addObj({type:'wall',a:{...last},b:{...p},wt:P.set.wallType,flip:false});S.chain.push(w.id);commit();
+      if(wallOverlaps().some(pr=>pr.includes(w.id)))toast('Væggen ligger oven i en eksisterende væg (vist med rødt). Fortryd med Backspace, eller slet den gamle væg.');
       if(S.pts.length>=2&&V.dist(p,S.pts[0])<1){S.pts=[];endWallChain();toast('Vægforløbet er lukket.');break;}}S.pts.push(p);break;
     case'pline':case'area':case'hatch':case'skel':S.pts.push(p);break;
     case'rect':if(!last)S.pts.push(p);else{if(V.dist(last,p)>1){addObj({type:'pline',pts:rectPts(Math.min(last.x,p.x),Math.min(last.y,p.y),Math.abs(p.x-last.x),Math.abs(p.y-last.y)),closed:true});commit();}S.pts=[];}break;
@@ -1389,7 +1403,7 @@ cv.addEventListener('pointerdown',e=>{
   S.drag={kind:'box',a:sp};draw();
 });
 cv.addEventListener('pointermove',e=>{
-  const sp=evPt(e);if(S.pointers.has(e.pointerId))S.pointers.set(e.pointerId,sp);S.mouse=sp;
+  const sp=evPt(e);if(S.pointers.has(e.pointerId))S.pointers.set(e.pointerId,sp);S.mouse=sp;S.alt=e.altKey;
   if(S.pinch&&S.pointers.size===2){const [a,b]=[...S.pointers.values()],d=V.dist(a,b),m=V.lerp(a,b,.5);const z=clamp(S.pinch.zoom*d/S.pinch.d,0.002,8);view.zoom=z;
     const wm={x:(S.pinch.m.x-view.W/2)/S.pinch.zoom+S.pinch.c.x,y:(S.pinch.m.y-view.H/2)/S.pinch.zoom+S.pinch.c.y};view.cx=wm.x-(m.x-view.W/2)/z;view.cy=wm.y-(m.y-view.H/2)/z;draw();return;}
   if(S.pan){view.cx=S.pan.c.x-(sp.x-S.pan.sp.x)/view.zoom;view.cy=S.pan.c.y-(sp.y-S.pan.sp.y)/view.zoom;draw();return;}
@@ -1427,6 +1441,7 @@ window.addEventListener('keydown',e=>{
   const k=e.key;
   if(e.ctrlKey||e.metaKey){const l=k.toLowerCase();if(l==='z'){e.shiftKey?redo():undo();e.preventDefault();}else if(l==='y'){redo();e.preventDefault();}else if(l==='s'){saveFile();e.preventDefault();}return;}
   if(k==='Shift'){S.shift=true;return;}
+  if(k==='Alt'){S.alt=true;e.preventDefault();if(S.mouse&&S.tool!=='select'){S.cur=snapAt(S.mouse,{from:lastPt()});draw();}return;}
   if(k===' '&&!S.textMode){S.space=true;e.preventDefault();return;}
   if(k==='F8'){toggleSnap('ortho');e.preventDefault();return;}
   if(k==='F7'){toggleSnap('grid');e.preventDefault();return;}
@@ -1446,7 +1461,7 @@ window.addEventListener('keydown',e=>{
   if(up==='O'&&S.sel.size===1&&S.tool==='select'){const o=objById([...S.sel][0]);if(o&&o.type==='sym'){o.rot=(((o.rot||0)+(e.shiftKey?-90:90))%360+360)%360;commit();return;}}
   const d=TOOLDEFS.find(x=>x&&x.k===up);if(d)setTool(d.id);
 });
-window.addEventListener('keyup',e=>{if(e.key==='Shift')S.shift=false;if(e.key===' ')S.space=false;});
+window.addEventListener('keyup',e=>{if(e.key==='Alt'){S.alt=false;if(S.mouse&&S.tool!=='select'){S.cur=snapAt(S.mouse,{from:lastPt()});draw();}}if(e.key==='Shift')S.shift=false;if(e.key===' ')S.space=false;});
 
 /* ---------- snaps-knapper ---------- */
 const SNAPDEFS=[['grid','GITTER','F7'],['end','ENDE',''],['mid','MIDT',''],['int','SKÆR',''],['perp','VINKELRET',''],['near','NÆR',''],['ortho','ORTO','F8'],['polar','POLÆR','F10']];
@@ -1520,7 +1535,7 @@ function objPanel(o,G){const id=o.id;let h='';
 function toolPanel(){const t=S.tool,s='_set';let h='';const def=TOOLDEFS.find(d=>d&&d.id===t);
   if(t==='select'){h+=head('Tilbygning CAD','kom i gang');
     h+=`<p class="note">Vælg et værktøj til venstre. Mens du tegner, kan du skrive mål direkte på tastaturet – de vises nederst og bruges med Enter.</p>`;
-    h+=`<div class="keys"><kbd>4800</kbd><span>længde i musens retning</span><kbd>4800&lt;90</kbd><span>længde og vinkel (0° = højre, 90° = op)</span><kbd>1200,-600</kbd><span>relativt fra sidste punkt</span><kbd>#0,0</kbd><span>absolut koordinat</span><kbd>Enter</kbd><span>afslut · højreklik gør det samme</span><kbd>C</kbd><span>luk væg- eller linjeforløb</span><kbd>Esc</kbd><span>afbryd</span><kbd>Backspace</kbd><span>fjern sidste punkt eller væg</span><kbd>O</kbd><span>drej symbol 90°</span><kbd>Shift</kbd><span>lås til vandret/lodret</span><kbd>Mellemknap</kbd><span>panorér (eller Mellemrum + træk)</span><kbd>Hjul</kbd><span>zoom</span><kbd>F</kbd><span>zoom til tegningen</span><kbd>Alt + træk</kbd><span>flyt væg uden at trække naboer med</span></div>`;
+    h+=`<div class="keys"><kbd>4800</kbd><span>længde i musens retning</span><kbd>4800&lt;90</kbd><span>længde og vinkel (0° = højre, 90° = op)</span><kbd>1200,-600</kbd><span>relativt fra sidste punkt</span><kbd>#0,0</kbd><span>absolut koordinat</span><kbd>Enter</kbd><span>afslut · højreklik gør det samme</span><kbd>C</kbd><span>luk væg- eller linjeforløb</span><kbd>Esc</kbd><span>afbryd</span><kbd>Backspace</kbd><span>fjern sidste punkt eller væg</span><kbd>O</kbd><span>drej symbol 90°</span><kbd>Shift</kbd><span>lås til vandret/lodret</span><kbd>Alt</kbd><span>hold nede for at slå fang af punkter fra</span><kbd>Mellemknap</kbd><span>panorér (eller Mellemrum + træk)</span><kbd>Hjul</kbd><span>zoom</span><kbd>F</kbd><span>zoom til tegningen</span><kbd>Alt + træk</kbd><span>flyt væg uden at trække naboer med</span></div>`;
     h+=`<hr class="s">`+fSel('Aktivt lag','_cur','cur',P.cur,layerOpts());return h;}
   h+=head(def?def.n:t,'værktøj');
   switch(t){
