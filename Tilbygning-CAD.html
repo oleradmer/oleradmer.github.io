@@ -1223,6 +1223,7 @@ const IC={
   circle:'<circle cx="12" cy="12" r="8"/>',
   hatch:'<path d="M4 4h16v16H4zM4 12l8-8M4 20L20 4M12 20l8-8"/>',
   roof:'<path d="M2 13l10-8 10 8M5 11v8h14v-8"/>',
+  moveall:'<path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/>',
   section:'<path d="M2 14h3M8 14h8M19 14h3M4 14V7M20 14V7M2 9l2-2 2 2M18 9l2-2 2 2"/>',
   lib:'<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4z"/><circle cx="16.5" cy="16.5" r="3.5"/>',
   calib:'<path d="M3 17L17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2"/>',
@@ -1233,7 +1234,8 @@ const TOOLDEFS=[
   {id:'room',n:'Rum (klik inde i rummet)',k:'R'},{id:'area',n:'Areal-polygon',k:'Q'},{id:'skel',n:'Skel / grund',k:'L'},null,
   {id:'dim',n:'Målsætning',k:'M'},{id:'text',n:'Tekst',k:'T'},{id:'kote',n:'Kote',k:'K'},null,
   {id:'pline',n:'Polylinje',k:'P'},{id:'rect',n:'Rektangel',k:'E'},{id:'arc',n:'Bue (3 punkter)',k:'A'},{id:'circle',n:'Cirkel',k:'C'},{id:'hatch',n:'Skravering',k:'H'},null,
-  {id:'roof',n:'Tag',k:'G'},{id:'section',n:'Snit',k:'S'},
+  {id:'roof',n:'Tag',k:'G'},{id:'section',n:'Snit',k:'S'},null,
+  {id:'moveall',n:'Flyt hele tegningen (alle lag og etager)',k:'X'},
 ];
 function buildToolbar(){$('#tools').innerHTML=TOOLDEFS.map(d=>d?`<button class="tool" data-act="tool" data-tool="${d.id}" title="${d.n} (${d.k})" aria-label="${d.n}"><svg viewBox="0 0 24 24">${IC[d.id]}</svg><kbd>${d.k}</kbd></button>`:'<div class="tsep"></div>').join('');}
 function setTool(t){if(t==='lib'){toggleLib();return;}endWallChain();S.tool=t;S.opName=null;S.opKey=null;S.pts=[];S.refs=[];S.input='';S.textMode=false;S.hoverOp=null;if(t!=='select'&&t!=='calib')S.sel.clear();
@@ -1260,11 +1262,13 @@ function prompt_(){const t=S.tool,n=S.pts.length;
     case'roof':return n?'<b>Tag:</b> næste hjørne af tagfladen (inkl. udhæng) · skriv længde · Enter lukker':'<b>Tag:</b> klik første hjørne af tagfladen – eller brug "Lav tag over bygningen" i panelet';
     case'section':return n?'<b>Snit:</b> slutpunkt for snitlinjen':'<b>Snit:</b> startpunkt for snitlinjen';
     case'place':{const D=SYMS[S.place&&S.place.k];return`<b>${D?D.n:'Symbol'}:</b> klik for at placere – punktet er bagkantens venstre hjørne · O drejer 90° · Esc afslutter`;}
+    case'moveall':return n?'<b>Flyt hele tegningen:</b> klik hvor punktet skal hen · eller skriv afstand (fx 5000<0) · Esc afbryder':'<b>Flyt hele tegningen:</b> klik et punkt på tegningen (fx et hjørne) · eller skriv afstand direkte (fx 5000<0) · alle lag og etager flyttes';
     case'paste':return`<b>Indsæt ${S.clip?S.clip.objs.length:0} objekter:</b> klik for at placere · eller skriv afstand fra originalen (fx 5000<0) · 0 = samme sted (fx på en anden etage) · Esc afslutter`;
     case'calib':return n<2?`<b>Kalibrér underlag:</b> klik punkt ${n+1} af 2 på en kendt afstand`:'<b>Kalibrér:</b> skriv den rigtige afstand og tryk Enter';
   }return'';}
 function cmdButtons(){const t=S.tool,n=S.pts.length,B=[];const b=(l,a,c)=>B.push(`<button data-act="${a}"${c?' class="acc"':''}>${l}</button>`);
   if(S.textMode){b('OK','cEnter',1);b('Annullér','cEsc');}
+  else if(t==='moveall'){b('Centrér på arket','mvCenter',1);if(n)b('Annullér','cEsc');else b('Færdig','cDone');}
   else if(t==='paste'){b('Samme sted','cPasteHere');b('Færdig','cDone',1);}
   else if(t==='place'){b('Drej 90°','cRot');b('Spejlvend','cMir');b('Færdig','cDone',1);}
   else if(CHAIN.includes(t)&&n){b('Fortryd punkt','cUndoPt');if((t==='wall'||t==='pline')&&n>=3)b('Luk','cClose');b(t==='area'||t==='hatch'||t==='skel'||t==='roof'?'Luk og afslut':'Afslut','cEnter',1);b('Annullér','cEsc');}
@@ -1390,6 +1394,7 @@ function toolPreview(){
     case'circle':if(last&&cur){ctx.beginPath();ctx.arc(last.x,last.y,V.dist(last,cur),0,2*PI);ctx.stroke();ln(last,cur,true);}break;
     case'arc':if(S.pts.length===1&&cur)ln(S.pts[0],cur,true);else if(S.pts.length===2&&cur){const a=arcFrom3(S.pts[0],S.pts[1],cur);if(a){ctx.beginPath();ctx.arc(a.c.x,a.c.y,a.r,a.a0,a.a0+n2p(a.a1-a.a0));ctx.stroke();}}break;
     case'dim':if(S.pts.length===1&&cur)ln(S.pts[0],cur,true);else if(S.pts.length===2&&cur){const D=dimGeom(S.pts[0],S.pts[1],P.set.dimMode,0);if(D){const off=V.dot(V.sub(cur,S.pts[0]),D.n);const p=new CanvasPainter(ctx,{...PAL,ink:acc},1/z);p.u=P.set.scale;p.setLayer({color:acc});drawDim(p,S.pts[0],S.pts[1],P.set.dimMode,off);}}break;
+    case'moveall':if(cur&&S.pts.length){const d=V.sub(cur,S.pts[0]);ctx.save();ctx.translate(d.x,d.y);ctx.globalAlpha=.85;const G=geo();ctx.strokeStyle=acc;ctx.lineWidth=1.5/z;ctx.beginPath();for(const g of G.walls){if(!onFloor(g.w))continue;for(const [a,b] of g.heavy){ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}}ctx.stroke();const bb=allBBox();if(bb){ctx.setLineDash([6/z,4/z]);ctx.strokeRect(bb.x0,bb.y0,bb.x1-bb.x0,bb.y1-bb.y0);ctx.setLineDash([]);}ctx.restore();ln(S.pts[0],cur,true);}break;
     case'paste':if(cur&&S.clip){const d=V.sub(cur,S.clip.ref);ctx.save();ctx.translate(d.x,d.y);ctx.globalAlpha=.8;strokeShapes(S.clip.shapes,acc,1.5,null);ctx.restore();}break;
     case'place':if(cur&&S.place){const tp={...S.place,p:cur};const p=new CanvasPainter(ctx,{...PAL,ink:acc,tone:acc},1/z);p.u=P.set.scale;p.setLayer({color:acc});ctx.globalAlpha=.85;drawSym(p,tp);ctx.globalAlpha=1;}break;
     case'door':case'window':{const h=S.hoverOp;if(h){const g=h.g,s0=h.pos-h.wid/2,s1=h.pos+h.wid/2;ctx.fillStyle='rgba(35,80,196,0.18)';ctx.beginPath();[wpt(g,s0,g.t/2),wpt(g,s1,g.t/2),wpt(g,s1,-g.t/2),wpt(g,s0,-g.t/2)].forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fill();ctx.stroke();
@@ -1433,6 +1438,7 @@ function toolPoint(p,sr){
       else{commit();toast(`${o.name}: ${fmtArea(r.area,2)}`);}break;}
     case'door':case'window':placeOpening(S.hoverOp);break;
     case'calib':if(S.pts.length<2)S.pts.push(p);break;
+    case'moveall':if(!S.pts.length)S.pts.push(p);else{const d=V.sub(p,S.pts[0]);S.pts=[];moveAll(d);}break;
     case'paste':if(S.clip)pasteAt(V.sub(p,S.clip.ref));break;
     case'place':if(S.place){const D=SYMS[S.place.k],L=LAYER_BY_CAT[D.cat];addObj(Object.assign(JSON.parse(JSON.stringify(S.place)),{type:'sym',p:{...p},layer:L&&layerById(L)?L:P.cur}));commit();}break;
   }
@@ -1462,6 +1468,8 @@ function applyTyped(inp){const t=S.tool,last=lastPt(),cur=S.cur?S.cur.p:null;
   if(t==='circle'&&last&&inp.t==='len'){addObj({type:'circle',c:{...last},r:Math.abs(inp.L)});commit();S.pts=[];updateCmd();return;}
   if(t==='dim'&&S.pts.length===2&&inp.t==='len'){const D=dimGeom(S.pts[0],S.pts[1],P.set.dimMode,0);if(D){const sg=cur&&V.dot(V.sub(cur,S.pts[0]),D.n)<0?-1:1;const q=V.add(S.pts[0],V.mul(D.n,sg*Math.abs(inp.L)));toolPoint(q,{p:q});}return;}
   if(t==='rect'&&last&&inp.t==='pair'){const sx=cur?Math.sign(cur.x-last.x)||1:1,sy=cur?Math.sign(cur.y-last.y)||1:1;const q={x:last.x+sx*Math.abs(inp.x),y:last.y+sy*Math.abs(inp.y)};toolPoint(q,{p:q});return;}
+  if(t==='moveall'){let d=null;if(inp.t==='pair'||inp.t==='rel')d={x:inp.x,y:-inp.y};else if(inp.t==='polar')d={x:Math.cos(inp.ang*DEG)*inp.L,y:-Math.sin(inp.ang*DEG)*inp.L};else if(inp.t==='len'&&S.pts.length&&S.cur){const dir=V.sub(S.cur.p,S.pts[0]);if(V.len(dir)>1)d=V.mul(V.norm(dir),inp.L);}
+    if(!d)return toast('Skriv en afstand med retning, fx 5000<0 (højre), 3000<90 (op) eller 2000,-1500.');S.pts=[];moveAll(d);return;}
   if(t==='paste'||(t==='select'&&S.sel.size)){let d=null;if(inp.t==='pair'||inp.t==='rel')d={x:inp.x,y:-inp.y};else if(inp.t==='polar')d={x:Math.cos(inp.ang*DEG)*inp.L,y:-Math.sin(inp.ang*DEG)*inp.L};else if(inp.t==='len'&&Math.abs(inp.L)<1e-9)d={x:0,y:0};
     if(!d)return toast('Skriv en afstand med retning, fx 1000<0 (højre), 1000<90 (op) eller 500,-200.');if(t==='paste')pasteAt(d);else moveSelBy(d);return;}
   if(t==='select'||t==='room'||t==='kote'||t==='text')return toast('Talindtastning bruges, mens du tegner – eller vælg noget og skriv en afstand for at flytte det.');
@@ -1692,6 +1700,7 @@ function toolPanel(){const t=S.tool,s='_set';let h='';const def=TOOLDEFS.find(d=
     case'hatch':h+=fSel('Materiale',s,'hatchMat',P.set.hatchMat,matOpts());break;
     case'roof':{const r=P.set.roof;h+=fSel('Tagform',s,'roof.kind',r.kind,[['saddel','Sadeltag'],['valm','Valmtag (fald til alle sider)'],['ensidig','Ensidig taghældning'],['flad','Fladt tag']]);h+=fNum('Hældning',s,'roof.pitch',r.pitch,{unit:'°'});if(r.kind==='ensidig')h+=fNum('Fald mod (retning)',s,'roof.dir',r.dir,{unit:'°'});h+=fLen('Tagfod over etagens gulv',s,'roof.eave',r.eave);h+=fLen('Udhæng',s,'roof.over',r.over??500);h+=fLen('Spær c/c',s,'roof.cc',r.cc);h+=fLen('Tagkonstruktion',s,'roof.thick',r.thick);
       h+=`<div class="btns">${btn('Lav tag over bygningen','autoroof','','btn acc')}</div><p class="note">"Lav tag over bygningen" lægger taget over ydervæggene på denne etage med udhæng. Vinkelhuse får én tagflade pr. fløj, så de mødes i skotrender. Du kan også selv klikke tagfladens hjørner.</p>`;break;}
+    case'moveall':h+=`<p class="note">Flytter alt på én gang: alle lag (også låste og underlaget), alle etager, skel, snit, mål og tag. Klik et punkt og klik hvor det skal hen – eller skriv en afstand, fx <b>5000&lt;0</b> (5 m mod højre) eller <b>2000,-1500</b>. Arket bliver liggende, så du kan placere tegningen på papiret.</p><div class="btns">${btn('Centrér tegningen på arket','mvCenter','','btn acc')}</div>`;return h;
     case'skel':h+=`<p class="note">Klik hjørnerne af grunden og tryk Enter for at lukke. Grundarealet beregnes og bruges i bebyggelsesprocenten. Bagefter angiver du, hvilke sider der vender mod vej eller sti.</p>`;break;
     case'section':h+=`<p class="note">Tegn en linje gennem bygningen. Snittet genereres ud fra vægge, åbninger, rum og tag.</p>`;break;
     case'place':if(S.place)h+=symFields(S.place,'_place',SYMS[S.place.k])+`<p class="note">Indstil før du klikker. Punktet ved musen er symbolets bageste venstre hjørne, så det er let at sætte mod en væg. O drejer, Shift+O drejer modsat.</p>`;break;
@@ -1752,7 +1761,7 @@ function panelProject(){const m='_meta',M=P.meta;let h=floorsHTML()+`<hr class="
   h+=fTxt('Projekt',m,'projekt',M.projekt)+fTxt('Adresse',m,'adresse',M.adresse)+fTxt('Matr.nr.',m,'matr',M.matr)+fTxt('Bygherre',m,'bygherre',M.bygherre)+fTxt('Tegning',m,'tegning',M.tegning)+fTxt('Tegnet af',m,'tegnetAf',M.tegnetAf)+fTxt('Dato',m,'dato',M.dato)+fTxt('Tegn.nr.',m,'tegnNr',M.tegnNr)+fTxt('Revision',m,'rev',M.rev);
   h+=`<hr class="s">`+head('Ark og målestok');{const sc=sheetState();if(!sc.ok)h+=`<div class="box warnbox"><p>${sheetMsg(sc)}</p></div>`;}
   h+=fSel('Målestok','_set','scale',P.set.scale,SCALES.map(s=>[s,'1:'+s]),'num')+fSel('Papir','_set','paper',P.set.paper,Object.keys(PAPERS).map(k=>[k,k]))+fSel('Retning','_set','orient',P.set.orient,[['L','Liggende'],['P','Stående']])+fChk('Vis ark på tegningen','_set','showSheet',P.set.showSheet);
-  h+=`<div class="btns">${btn('Centrér ark om tegningen','centerSheet')}</div><p class="note">Arket (stiplet ramme) viser præcis hvad der kommer med på PDF'en. Stregtykkelser og tekster følger målestokken.</p>`;
+  h+=`<div class="btns">${btn('Centrér tegningen på arket','mvCenter','','btn acc')}${btn('Centrér ark om tegningen','centerSheet')}${btn('Flyt hele tegningen…','mvTool')}</div><p class="note">Arket (stiplet ramme) viser præcis hvad der kommer med på PDF'en. Stregtykkelser og tekster følger målestokken.</p>`;
   h+=`<hr class="s">`+head('Bygning og tegning');
   h+=fNum('Terrænkote','_set','terrain',P.set.terrain,{unit:'mm'})+fLen('Gitter','_set','grid',P.set.grid);
   h+=`<hr class="s"><div class="btns">${btn('Indlæs eksempel','sample')}${btn('Ny tom tegning','new')}</div>`;
@@ -1832,6 +1841,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(
     case'view':openView(b.dataset.kind,b.dataset.arg||undefined);S.lastView={...S.view};break;
     case'viewsite':openView('site');break;case'viewfac':openView('facades');break;
     case'calib':{const id=b.dataset.id||(o&&o.id);if(id){S.calibId=id;setTool('calib');S.sel=new Set([id]);}break;}
+    case'mvCenter':centerOnSheet();break;case'mvTool':setTool('moveall');break;
     case'centerSheet':{const bb=drawingBBox();if(bb){P.set.sheet={x:Math.round((bb.x0+bb.x1)/2),y:Math.round((bb.y0+bb.y1)/2+(P.set.scale*20))};commit();}break;}
     case'lvis':{const L=layerById(b.dataset.l);L.visible=!L.visible;if(!L.visible)for(const id of [...S.sel]){const x=objById(id);if(x&&x.layer===L.id)S.sel.delete(id);}commit();break;}
     case'llock':{const L=layerById(b.dataset.l);L.locked=!L.locked;commit();break;}
@@ -1893,6 +1903,17 @@ function transformSel(kind,arg,msg){const objs=selObjs(false).filter(o=>editable
 function editBox(){return`<div class="box">${head('Redigér','')}<div class="btns">${btn('Kopiér','ecopy')}${btn('Duplikér','edup')}${btn('↺ 90°','erot','data-d="90"')}${btn('↻ 90°','erot','data-d="-90"')}${btn('Spejl ↔','emir','data-a="v"')}${btn('Spejl ↕','emir','data-a="h"')}</div>
   <div class="fld"><span>Drej med</span><span class="unitwrap"><input type="number" id="erotv" value="15" step="any"><i>°</i></span></div><div class="btns">${btn('Drej','erotv')}</div>
   <p class="note">Flyt præcist: skriv fx <b>1000&lt;0</b> (1 m mod højre) eller <b>0,500</b> (0,5 m op) og tryk Enter. Ctrl+C, Ctrl+V og Ctrl+D virker også. Kopiér til en anden etage: Ctrl+C, skift etage, Ctrl+V og skriv 0.</p></div>`;}
+
+/* ---------- flyt hele tegningen ---------- */
+function allBBox(){let b=null;for(const o of P.objs){if(o.type==='underlay'||o.type==='skel'||o.type==='opening')continue;const bb=objBBox(o);if(!bb)continue;if(!b)b={...bb};else{b.x0=Math.min(b.x0,bb.x0);b.y0=Math.min(b.y0,bb.y0);b.x1=Math.max(b.x1,bb.x1);b.y1=Math.max(b.y1,bb.y1);}}return b;}
+function moveAll(d,msg){if(Math.abs(d.x)<0.5&&Math.abs(d.y)<0.5)return toast('Tegningen ligger allerede der.');
+  for(const o of P.objs){if(o.type==='opening')continue;const orig=JSON.parse(JSON.stringify(o));
+    if(o.type==='wall'){o.a=V.add(orig.a,d);o.b=V.add(orig.b,d);}else if(o.type==='skel'){o.pts=orig.pts.map(q=>V.add(q,d));}else translateObj(o,orig,d);
+    if(o.type==='dim'){if(o.c1)o.c1=V.add(o.c1,d);if(o.c2)o.c2=V.add(o.c2,d);}}
+  view.cx+=d.x;view.cy+=d.y;commit();toast(msg||`Hele tegningen er flyttet ${fmtLen(V.len(d))} ${P.set.unit} – alle lag og etager. Fortryd med Ctrl+Z.`);}
+function centerOnSheet(){const b=allBBox();if(!b)return toast('Der er intet at centrere endnu.');const {W,H}=paperDims(),s=P.set.scale,F=frameRect(W,H);
+  const tgt={x:P.set.sheet.x+(F.x+F.w/2-W/2)*s,y:P.set.sheet.y+(F.y+(F.h-46)/2-H/2)*s},c={x:(b.x0+b.x1)/2,y:(b.y0+b.y1)/2};
+  const d={x:Math.round(tgt.x-c.x),y:Math.round(tgt.y-c.y)};moveAll(d,'Tegningen er centreret på arket – alle lag og etager er flyttet med. Fortryd med Ctrl+Z.');view.cx-=d.x;view.cy-=d.y;zoomFit();}
 /* ---------- tag over bygningen ---------- */
 function roofDefaults(){const R=JSON.parse(JSON.stringify(P.set.roof));const over=R.over;delete R.over;R.eave=floorZ(P.curFloor)+(R.eave||0);return{R,over};}
 function addRoof(pts,extra){const {R}=roofDefaults();return addObj(Object.assign({type:'roof',pts:pts.map(q=>({x:Math.round(q.x),y:Math.round(q.y)})),layer:layerById('L_ts')?'L_ts':P.cur},R,extra||{}));}
