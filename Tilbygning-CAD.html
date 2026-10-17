@@ -168,6 +168,11 @@ table.area tfoot td{font-weight:700;border-bottom:0}
 .sline i{display:block;font-style:normal;color:var(--muted);font-size:11px}
 .sline b{font-variant-numeric:tabular-nums}
 .mfoot .note{max-width:none}
+.m3dbox{width:min(1400px,100%);height:min(92vh,100%)}
+.g3wrap{position:relative;min-height:0;background:linear-gradient(#dfe8f1,#f4f6f8);overflow:hidden}
+.g3wrap canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.setlist{display:flex;flex-direction:column;gap:6px}
+.setlist a{color:var(--accent)}
 .toast{position:fixed;left:50%;bottom:calc(56px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--panel);padding:9px 14px;border-radius:8px;font-size:13px;max-width:min(560px,calc(100vw - 32px));box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:30;opacity:0;pointer-events:none;transition:opacity .2s}
 .toast.show{opacity:1}
 
@@ -215,6 +220,7 @@ table.area tfoot td{font-weight:700;border-bottom:0}
     <div class="grp">
       <button class="hb" data-act="import" title="Læg en tegning, BBR-skitse eller PDF ind som baggrund">Underlag…</button>
       <button class="hb" data-act="views" title="Situationsplan, facader og snit – til byggeansøgningen">Tegninger</button>
+      <button class="hb" data-act="v3d" title="Se huset i 3D">3D</button>
     </div>
     <span class="spacer"></span>
     <div class="grp">
@@ -250,6 +256,19 @@ table.area tfoot td{font-weight:700;border-bottom:0}
   </div>
 </div>
 
+<div class="modal" id="m3d" hidden>
+  <div class="mbox m3dbox">
+    <div class="mhead"><strong>3D</strong><div class="vtabs"><span>Se fra</span><button data-act="cam" data-v="iso">Fugleperspektiv</button><button data-act="cam" data-v="S">Syd</button><button data-act="cam" data-v="N">Nord</button><button data-act="cam" data-v="O">Øst</button><button data-act="cam" data-v="W">Vest</button></div><span class="spacer"></span>
+      <label class="hsel">Etager <select id="g3floor" aria-label="Vis etager op til"></select></label>
+      <label class="hsel"><input type="checkbox" id="g3roof" checked> Tag</label>
+      <label class="hsel"><input type="checkbox" id="g3furn" checked> Inventar</label>
+      <label class="hsel">Sol <input type="range" id="g3sun" min="0" max="360" step="5" value="200" aria-label="Solens retning"></label>
+      <button class="btn" data-act="g3png">Gem billede</button>
+      <button class="btn" data-act="g3close">Luk</button></div>
+    <div class="g3wrap" id="g3wrap"><p class="note" id="g3msg" style="padding:24px">Indlæser 3D …</p></div>
+    <div class="mfoot"><p class="note">Træk for at dreje · højreklik-træk eller Shift-træk for at panorere · hjul eller to fingre for at zoome. Modellen bygges fra vægge, vinduer, døre, gulve, tag og inventar.</p></div>
+  </div>
+</div>
 <div class="modal" id="secModal" hidden>
   <div class="mbox">
     <div class="mhead"><strong id="secTitle">Tegninger</strong><div class="vtabs" id="vtabs"></div><span class="spacer"></span>
@@ -859,7 +878,8 @@ function drawPlan(p,opt={}){
     if(scr)o.pts.forEach((a,i)=>{const b=o.pts[(i+1)%o.pts.length],k=(o.kinds&&o.kinds[i])||'nabo';p.text(`${i+1}${k==='vej'?' · vej':k==='sti'?' · sti':''}`,V.lerp(a,b,.5),{h:2.4,anchor:'middle',valign:'middle',bold:true});});}
   for(const o of P.objs){if(o.type!=='room'||!VIS(o))continue;const r=G.rooms.get(o.id);if(!r)continue;setL(p,o.layer);
     if(o.cat==='netto'){const lp=o.mode==='auto'?o.seed:(pip(centroid(r.poly),r.poly)?centroid(r.poly):r.poly[0]);
-      p.text(o.name||'Rum',{x:lp.x,y:lp.y-1.4*u},{h:3.2,anchor:'middle',bold:true});p.text(fmtArea(r.area),{x:lp.x,y:lp.y+2.6*u},{h:2.5,anchor:'middle'});p.text('Gulv '+fmtKote(o.kote||0),{x:lp.x,y:lp.y+5.8*u},{h:2,anchor:'middle'});}
+      p.text(o.name||'Rum',{x:lp.x,y:lp.y-1.4*u},{h:3.2,anchor:'middle',bold:true});p.text(fmtArea(r.area),{x:lp.x,y:lp.y+2.6*u},{h:2.5,anchor:'middle'});p.text('Gulv '+fmtKote(o.kote||0),{x:lp.x,y:lp.y+5.8*u},{h:2,anchor:'middle'});
+      if(P.set.showLys){const d=daylight().get(o.id);if(d&&d.need)p.text(`Dagslys ${d.pct.toFixed(1).replace('.',',')} %`,{x:lp.x,y:lp.y+8.8*u},{h:2,anchor:'middle',bold:true,color:scr&&!d.ok?'#c0392b':undefined});}}
     else{p.poly(r.poly,true,{w:LW.thin,dash:[3,1.2]});const lp=o.mode==='auto'?o.seed:centroid(r.poly);p.text(`${o.name||'Areal'}: ${fmtArea(r.area)}`,lp,{h:2.8,anchor:'middle',bold:true});}
     if(scr&&!r.ok){const lp2=o.mode==='auto'?o.seed:centroid(r.poly);p.text('Ikke lukket af vægge',{x:lp2.x,y:lp2.y+(o.cat==='netto'?9:3.6)*u},{h:2,anchor:'middle',bold:true,color:'#c0392b'});}}
   for(const o of P.objs){if(!VIS(o))continue;
@@ -872,21 +892,21 @@ function drawPlan(p,opt={}){
 function paperDims(){let [w,h]=PAPERS[P.set.paper]||PAPERS.A3;if(P.set.orient==='P')[w,h]=[h,w];return{W:w,H:h};}
 const frameRect=(W,H)=>({x:20,y:10,w:W-30,h:H-20});
 const rectPts=(x,y,w,h)=>[{x,y},{x:x+w,y},{x:x+w,y:y+h},{x,y:y+h}];
-function drawSheet(p,W,H,tegning,scale,info){
+function drawSheet(p,W,H,tegning,scale,info,nr){
   p.setLayer({name:'ARK',color:null});const F=frameRect(W,H);p.poly(rectPts(F.x,F.y,F.w,F.h),true,{w:0.5});
-  const tw=Math.min(180,F.w*0.62),th=42,x0=F.x+F.w-tw,y0=F.y+F.h-th,M=P.meta,s=scale||P.set.scale;
+  const tw=Math.min(180,F.w*0.62),th=42,x0=F.x+F.w-tw,y0=F.y+F.h-th,M=P.meta,noScale=scale==='none',s=noScale?0:(scale||P.set.scale);
   p.poly(rectPts(x0,y0,tw,th),true,{w:0.5});
   const rows=[12,10,10,10];let y=y0;const cell=(x,yy,w,h,label,val,big)=>{p.text(label.toUpperCase(),{x:x+1.5,y:yy+2.6},{h:1.6});p.text(val||'',{x:x+1.5,y:yy+h-2},{h:big?3.6:2.6,bold:!!big});};
   const hl=(yy)=>p.line({x:x0,y:yy},{x:x0+tw,y:yy},{w:0.25});const vl=(xx,yy,h)=>p.line({x:xx,y:yy},{x:xx,y:yy+h},{w:0.25});
   cell(x0,y,tw*0.62,rows[0],'Projekt',M.projekt,true);vl(x0+tw*0.62,y,rows[0]);cell(x0+tw*0.62,y,tw*0.38,rows[0],'Adresse',M.adresse);y+=rows[0];hl(y);
   cell(x0,y,tw*0.62,rows[1],'Bygherre',M.bygherre);vl(x0+tw*0.62,y,rows[1]);cell(x0+tw*0.62,y,tw*0.38,rows[1],'Matr.nr.',M.matr);y+=rows[1];hl(y);
-  cell(x0,y,tw*0.62,rows[2],'Tegning',tegning||M.tegning,false);vl(x0+tw*0.62,y,rows[2]);cell(x0+tw*0.62,y,tw*0.38,rows[2],'Mål · ark',`1:${s} · ${P.set.paper} · mm`);y+=rows[2];hl(y);
-  const c4=[0.28,0.32,0.22,0.18];let xx=x0;[['Dato',M.dato],['Tegnet af',M.tegnetAf],['Tegn.nr.',M.tegnNr],['Rev.',M.rev]].forEach(([l,v],i)=>{const w=tw*c4[i];cell(xx,y,w,rows[3],l,v);xx+=w;if(i<3)vl(xx,y,rows[3]);});
+  cell(x0,y,tw*0.62,rows[2],'Tegning',tegning||M.tegning,false);vl(x0+tw*0.62,y,rows[2]);cell(x0+tw*0.62,y,tw*0.38,rows[2],'Mål · ark',noScale?`${P.set.paper}`:`1:${s} · ${P.set.paper} · mm`);y+=rows[2];hl(y);
+  const c4=[0.28,0.32,0.22,0.18];let xx=x0;[['Dato',M.dato],['Tegnet af',M.tegnetAf],['Tegn.nr.',nr||M.tegnNr],['Rev.',M.rev]].forEach(([l,v],i)=>{const w=tw*c4[i];cell(xx,y,w,rows[3],l,v);xx+=w;if(i<3)vl(xx,y,rows[3]);});
   /* målestok og nordpil */
-  let m=1;for(const c of [1,2,5,10,20,50])if(c*1000/s<=100)m=c;const bl=m*1000/s,bx=x0-10-bl,by=F.y+F.h-8;
+  if(!noScale){let m=1;for(const c of [1,2,5,10,20,50])if(c*1000/s<=100)m=c;const bl=m*1000/s,bx=x0-10-bl,by=F.y+F.h-8;
   for(let i=0;i<5;i++)p.poly(rectPts(bx+i*bl/5,by,bl/5,2),true,{w:0.18},i%2?null:'ink');
   p.text('0',{x:bx,y:by-1.2},{h:2,anchor:'middle'});p.text(`${m} m`,{x:bx+bl,y:by-1.2},{h:2,anchor:'middle'});p.text(`1:${s}`,{x:bx+bl/2,y:by+6},{h:2.2,anchor:'middle'});
-  const nc={x:bx-14,y:by-1};p.circle(nc,6,{w:0.25});p.poly([{x:nc.x,y:nc.y-6},{x:nc.x+2.4,y:nc.y+3},{x:nc.x,y:nc.y+1.4},{x:nc.x-2.4,y:nc.y+3}],true,{w:0.25},'ink');p.text('N',{x:nc.x,y:nc.y-7.5},{h:2.6,anchor:'middle',bold:true});
+  const nc={x:bx-14,y:by-1};p.circle(nc,6,{w:0.25});p.poly([{x:nc.x,y:nc.y-6},{x:nc.x+2.4,y:nc.y+3},{x:nc.x,y:nc.y+1.4},{x:nc.x-2.4,y:nc.y+3}],true,{w:0.25},'ink');p.text('N',{x:nc.x,y:nc.y-7.5},{h:2.6,anchor:'middle',bold:true});}
   if(info&&info.length){const bw=74,rh=4.6,bh=info.length*rh+3,bx0=F.x+4,by0=F.y+F.h-4-bh;p.poly(rectPts(bx0,by0,bw,bh),true,{w:0.25},'paper');
     info.forEach(([l,v],i)=>{const yy=by0+1.5+(i+0.78)*rh;p.text(l,{x:bx0+2,y:yy},{h:2});p.text(String(v),{x:bx0+bw-2,y:yy},{h:2,anchor:'end',bold:true});});}
 }
@@ -994,6 +1014,19 @@ function facadePaint(p,fd){
   const hx=um-300;drawDim(p,{x:hx,y:Y(zT)},{x:hx,y:Y(fd.ztop)},'v',-8*u);
   const ty=Y(zT-350)+12*u;p.text(`Facade mod ${FACADES[fd.side].n}`,{x:(um+uM)/2,y:ty},{h:5,anchor:'middle',bold:true});p.text(`1:${Math.round(u)}`,{x:(um+uM)/2,y:ty+6*u},{h:3,anchor:'middle'});
   return{x0:hx-14*u,x1:kx+42*u,y0:Y(fd.ztop)-8*u,y1:ty+9*u};}
+/* ---------- dagslys (BR18 § 379, 10 %-reglen) ---------- */
+const NO_LYS=/\b(bad|badeværelse|wc|toilet|entr[ée]|gang|bryggers|depot|teknik|garage|carport|skur|kælder|walk.?in|garderobe|vaskerum|fyrrum|hall)\b/i;
+function roomNeedsLight(o){if(o.lys==='ja')return true;if(o.lys==='nej')return false;return!NO_LYS.test(o.name||'');}
+function isGlazed(o){if(o.glazed!=null)return!!o.glazed;return o.kind==='window'||(o.kind==='door'&&(o.style==='slide'||o.style==='double'));}
+function glassArea(og){const o=og.o,w=og.s1-og.s0,h=o.height||(o.kind==='window'?1300:2100),n=o.kind==='window'?Math.max(1,Math.round(o.panes||1)):(o.style==='double'||o.style==='slide'?2:1);
+  return Math.max(0,w-140-50*(n-1))*Math.max(0,h-140)/1e6;}
+let DLV=-1,DLC=null;
+function daylight(){if(DLV===MV)return DLC;DLV=MV;const G=geo(),lt=P.set.lt||0.75,k=Math.min(1,lt/0.75),rooms=P.objs.filter(o=>o.type==='room'&&o.cat==='netto'),out=new Map();
+  for(const o of rooms){const r=G.rooms.get(o.id);if(r)out.set(o.id,{o,r,glass:0,n:0});}
+  for(const og of G.opens.values()){if(!isGlazed(og.o))continue;const g=og.g,sm=(og.s0+og.s1)/2,ga=glassArea(og);
+    for(const side of [1,-1]){const q=wpt(g,sm,side*(g.t/2+150));for(const d of out.values()){if((d.o.floor||'F0')!==g.floor)continue;if(pip(q,d.r.poly)){d.glass+=ga;d.n++;}}}}
+  for(const d of out.values()){d.eff=d.glass*k;d.area=d.r.area/1e6;d.pct=d.area?d.eff/d.area*100:0;d.need=roomNeedsLight(d.o);d.ok=!d.need||d.pct>=10;}
+  return DLC=out;}
 /* ---------- grund, skel og situationsplan ---------- */
 const SKEL_KINDS=[['nabo','Naboskel'],['sti','Sti'],['vej','Vej']];
 function skelEdges(){const out=[];for(const o of P.objs){if(o.type!=='skel'||!o.pts||o.pts.length<3||!LV(o.layer))continue;const n=o.pts.length;for(let i=0;i<n;i++)out.push({o,i,a:o.pts[i],b:o.pts[(i+1)%n],kind:(o.kinds&&o.kinds[i])||'nabo'});}return out;}
@@ -1533,6 +1566,7 @@ function zoomFit(){const b=drawingBBox();if(!b)return;const pad=1.15,w=Math.max(
 /* ---------- tastatur ---------- */
 window.addEventListener('keydown',e=>{
   const tg=e.target;if(tg&&(tg.tagName==='INPUT'||tg.tagName==='SELECT'||tg.tagName==='TEXTAREA')){if(e.key==='Escape')tg.blur();return;}
+  if(!$('#m3d').hidden){if(e.key==='Escape')close3D();return;}
   if(!$('#secModal').hidden){if(e.key==='Escape')closeSection();return;}
   const k=e.key;
   if(e.ctrlKey||e.metaKey){const l=k.toLowerCase();if(l==='z'){e.shiftKey?redo():undo();e.preventDefault();}else if(l==='c'&&S.sel.size){copySel();e.preventDefault();}else if(l==='v'){pasteStart();e.preventDefault();}else if(l==='d'&&S.sel.size){if(copySel(true))pasteStart();e.preventDefault();}else if(l==='y'){redo();e.preventDefault();}else if(l==='s'){saveFile();e.preventDefault();}return;}
@@ -1600,10 +1634,13 @@ function objPanel(o,G){const id=o.id;let h='';
       if(o.kind==='window')h+=fLen('Brystning (sålbænk)',id,'sill',o.sill);
       if(og){const L=openingLimits(og);h+=`<div class="box">${fLen('Afstand til hjørne · start',id,'dA',L.dA)}${fLen('Afstand til hjørne · slut',id,'dB',L.dB)}<p class="note">Målt langs væggen fra åbningens kant til det indvendige hjørne.</p></div>`;}
       if(o.kind==='door')h+=fSel('Udførelse',id,'style',o.style||'single',[['single','1-fløjet'],['double','2-fløjet'],['slide','Skydedør'],['port','Port']]);else h+=fNum('Antal fag',id,'panes',o.panes||1,{step:1});
+      h+=fChk('Glas (tæller i dagslys)',id,'glazed',isGlazed(o));{const og=geo().opens.get(id);if(og&&isGlazed(o))h+=ro('Glasareal (anslået)',glassArea(og).toFixed(2).replace('.',',')+' m²');}
       if(o.kind==='door')h+=`<div class="btns">${btn('Skift hængselside','hinge')}${btn('Slå til anden side','swing')}</div>`;break;}
     case'room':{const r=G.rooms.get(id);h+=head(o.cat==='netto'?'Rum':'Areal',o.mode==='auto'?'følger væggene':'polygon');
       h+=fTxt('Navn',id,'name',o.name);h+=fSel('Kategori',id,'cat',o.cat,ROOM_CATS);
       h+=fNum('Gulvkote',id,'kote',o.kote||0,{unit:'mm'});
+      if(o.cat==='netto'){const d=daylight().get(id);h+=fSel('Krav om dagslys',id,'lys',o.lys||'auto',[['auto',`Automatisk (${roomNeedsLight({name:o.name})?'ja':'nej'})`],['ja','Ja – opholdsrum, soverum, køkken'],['nej','Nej – bad, gang, depot o.l.']]);
+        if(d)h+=`<div class="box">${ro('Glasareal',d.eff.toFixed(2).replace('.',',')+' m²')}${ro('Dagslys (glas ÷ gulv)',`<span class="pill ${d.need?(d.ok?'ok':'bad'):'ok'}">${d.pct.toFixed(1).replace('.',',')} %</span>`)}</div>`;}
       h+=`<div class="box">${ro('Areal',r?fmtArea(r.area,2):'–')}${ro('Omkreds',r?(r.perim/1000).toFixed(2).replace('.',',')+' m':'–')}${r&&!r.ok?`<p class="note" style="color:var(--bad)">Rummet er ikke længere lukket af vægge. Arealet er den sidst kendte form. Røde ringe viser vægender, der ikke er forbundet.</p>`:''}</div>`;
       h+=`<p class="note">${o.mode==='auto'?(o.cat==='netto'?'Indvendigt areal mellem vægfladerne. Det opdateres, når du flytter vægge.':'Udvendigt omrids af alle sammenhængende vægge. Det opdateres, når du flytter vægge.'):'Tegnet som polygon. Flyt hjørnerne med grebene.'}</p>`;break;}
     case'dim':{const pp=dimPts(o);const D=pp?dimGeom(pp[0],pp[1],o.mode,o.off):null;const assoc=[o.p1,o.p2].filter(r=>r&&r.k!=='pt').length;
@@ -1685,6 +1722,7 @@ function panelAreas(){const G=geo();let h=head('Arealer','beregnes løbende');
     <hr class="s">${ro('Bebygget areal (fodaftryk)',f1(bebygget))}
     ${hasSkel&&P.set.grundAuto!==false?ro('Grundareal (fra skel)',f1(grund)):fNum('Grundareal',`_set`,'grund',grund,{unit:'m²'})}${hasSkel?fChk('Grundareal fra skel','_set','grundAuto',P.set.grundAuto!==false):''}${fNum('Maks. bebyggelsesprocent',`_set`,'maxPct',max,{unit:'%'})}${fNum('Fradrag for carport/udhus',`_set`,'secDeduct',fr,{unit:'m²'})}
     <p class="note">${cnt.etage||cnt.etage2?'':'<b>Mangler etageareal:</b> brug Rum-værktøjet med kategorien "Etageareal · ydre mål" og klik inde i bygningen – på hver etage. '}Etagearealet tæller alle etager, der er markeret som "tæller med" under Projekt. Bebygget areal tages fra stueplanen. Udestuer og overdækkede terrasser tæller fuldt med – tegn dem som etageareal. Fradraget er 50 m² for fritliggende enfamiliehuse og 20 m² for rækkehuse. Lokalplan eller servitut kan have andre regler.</p></div>`;
+  h+=lysBox();
   h+=siteBox();
   return h;}
 function floorsHTML(){let h=head('Etager',`${P.floors.length} stk.`);
@@ -1777,7 +1815,11 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(
     case'secshow':openSection(b.dataset.id||(o&&o.id));break;
     case'secflip':if(o){o.flip=!o.flip;commit();}break;
     case'secclose':closeSection();break;
-    case'secpdf':if(S.view)exportPDF(S.view.kind,S.view.arg);break;case'secsvg':if(S.view)exportSVG(S.view.kind,S.view.arg);break;
+    case'secpdf':if(S.view){if(S.view.kind==='set')exportSet();else exportPDF(S.view.kind,S.view.arg);}break;
+    case'setpdf':exportSet();break;
+    case'setinc':{P.set.setSkip=P.set.setSkip||{};const k=b.dataset.k;P.set.setSkip[k]=!b.checked;commit();renderView();break;}
+    case'setshow':e.preventDefault();openView(b.dataset.kind,b.dataset.arg||undefined);break;case'secsvg':if(S.view&&S.view.kind!=='set')exportSVG(S.view.kind,S.view.arg);break;
+    case'v3d':open3D();break;case'g3close':close3D();break;case'g3png':g3png();break;case'cam':g3preset(b.dataset.v);break;
     case'views':{const has=P.objs.some(x=>x.type==='skel');openView(S.lastView?S.lastView.kind:(has?'site':'facade'),S.lastView?S.lastView.arg:'S');break;}
     case'view':openView(b.dataset.kind,b.dataset.arg||undefined);S.lastView={...S.view};break;
     case'viewsite':openView('site');break;case'viewfac':openView('facades');break;
@@ -1907,6 +1949,13 @@ function siteStatusHTML(sc){if(!sc.has)return`<p class="note">${sc.noSkel?'Tegn 
   <div class="sline"><span>Højdegrænseplan mod nabo og sti<i>højde højst 1,4 × afstand · udnyttet</i></span><b>${w?Math.round(w.ratio*100)+' %':'–'}</b>${pill(sc.okPlane)}</div>
   ${!sc.okPlane&&w?`<p class="note" style="color:var(--bad)">Værste punkt er ${m(w.h)} højt og ${m(w.d)} fra skel. Tilladt er ${m(w.allow)}. Røde ringe på situationsplanen viser punkterne.</p>`:''}
   <p class="note">Carporte, garager og udhuse må ligge tættere på skel efter særlige regler (BR18 §§ 180–181), som ikke kontrolleres her. Højden måles fra terrænkoten under Projekt. Lokalplan eller servitut kan stille andre krav.</p>`;}
+function lysBox(){const D=[...daylight().values()];let h=`<div class="box">${head('Dagslys','BR18 § 379')}`;
+  if(!D.length)return h+`<p class="note">Ingen rum endnu. Dagslys beregnes for rum med kategorien "Rum · nettoareal".</p></div>`;
+  const multi=P.floors.length>1;h+=`<table class="area"><thead><tr><th>Rum</th><th style="text-align:right">Gulv</th><th style="text-align:right">Glas</th><th style="text-align:right">%</th></tr></thead><tbody>`+
+    D.map(d=>`<tr class="click" data-act="selobj" data-id="${d.o.id}"><td>${esc(d.o.name)}${multi?`<i style="font-style:normal;color:var(--muted)"> · ${esc(floorById(d.o.floor).name)}</i>`:''}</td><td class="n">${d.area.toFixed(1).replace('.',',')}</td><td class="n">${d.eff.toFixed(2).replace('.',',')}</td><td class="n">${d.need?`<span class="pill ${d.ok?'ok':'bad'}">${d.pct.toFixed(1).replace('.',',')}</span>`:'<span style="color:var(--muted)">–</span>'}</td></tr>`).join('')+`</tbody></table>`;
+  const bad=D.filter(d=>!d.ok).length;
+  h+=`${fNum('Glassets lystransmittans','_set','lt',P.set.lt||0.75,{step:0.01})}${fChk('Vis dagslys på planen','_set','showLys',!!P.set.showLys)}
+  <p class="note">${bad?`<b style="color:var(--bad)">${bad} rum når ikke 10 %.</b> `:''}Glasarealet skal være mindst 10 % af gulvarealet i soverum, køkkener og opholdsrum. Programmet anslår glasset ud fra hullets mål minus karm og poster, og regner med lystransmittans 0,75. Skygge fra udhæng, naboer og træer er ikke med. Rum med "bad", "gang", "entré", "depot" o.l. i navnet har intet krav – ret det på rummet.</p></div>`;return h;}
 function siteBox(){return`<div class="box">${head('Skel og højde','BR18 §§ 176–177')}${siteStatusHTML(siteCheck())}<div class="btns">${btn('Vis situationsplan','viewsite','','btn acc')}${btn('Vis facader','viewfac')}</div></div>`;}
 function viewScale(kind){return kind==='site'?(P.set.sitScale||200):(kind==='facade'||kind==='facades')?(P.set.facScale||100):P.set.scale;}
 function facadesAll(sp,s,F){const parts={};for(const k of ['S','N','O','W']){const fd=facadeData(k);if(!fd)continue;const q=new SVGPainter(EXPORT_PAL);q.u=s;const bb=facadePaint(q,fd);parts[k]={bb,o:q.o,w:bb.x1-bb.x0,h:bb.y1-bb.y0};}
@@ -1918,6 +1967,7 @@ function facadesAll(sp,s,F){const parts={};for(const k of ['S','N','O','W']){con
     for(const k of r){const q=parts[k];sp.o.push(`<g transform="translate(${f2(x-q.bb.x0)} ${f2(y+(rh-q.h)/2-q.bb.y0)})">${q.o.join('')}</g>`);x+=q.w+gap;}y+=rh+gap;}
   return{x0:0,y0:0,x1:best.W_,y1:best.H_};}
 function buildSheet(kind,arg,opt={}){
+  if(kind==='cover'||kind==='schedule')return paperSheet(kind,opt);
   const {W,H}=paperDims(),s=viewScale(kind),F=frameRect(W,H),sp=new SVGPainter(EXPORT_PAL);sp.u=s;let bb=null,center=null,tegning=P.meta.tegning,info=null;
   if(kind==='plan'){const fid=arg||P.curFloor;drawPlan(sp,{floor:fid});center=P.set.sheet;if(P.floors.length>1)tegning=`${P.meta.tegning} · ${floorById(fid).name}`;}
   else if(kind==='section'){const sec=objById(arg),sd=sec&&sectionData(sec);if(!sd)return null;bb=sectionPaint(sp,sec,sd);tegning=`Snit ${sec.label}-${sec.label}`;}
@@ -1927,9 +1977,57 @@ function buildSheet(kind,arg,opt={}){
   let px=W/2,py=H/2,fits=true,need=null;
   if(!center){const aw=F.w,ah=F.h-46;center={x:(bb.x0+bb.x1)/2,y:(bb.y0+bb.y1)/2};px=F.x+aw/2;py=F.y+ah/2;const k=Math.max((bb.x1-bb.x0)/s/aw,(bb.y1-bb.y0)/s/ah);fits=k<=1.005;if(!fits)need=SCALES.find(x=>x>=s*k-0.01)||null;}
   else fits=sheetState(arg||P.curFloor).ok;
-  const shp=new SVGPainter(EXPORT_PAL);shp.u=1;drawSheet(shp,W,H,tegning,s,info);
+  const shp=new SVGPainter(EXPORT_PAL);shp.u=1;drawSheet(shp,W,H,tegning,s,info,opt.nr);
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}"><rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/><defs><clipPath id="frameclip"><rect x="${F.x}" y="${F.y}" width="${F.w}" height="${F.h}"/></clipPath></defs><g clip-path="url(#frameclip)"><g transform="translate(${f2(px)} ${f2(py)}) scale(${1/s}) translate(${f2(-center.x)} ${f2(-center.y)})">${sp.o.join('')}</g></g>${shp.o.join('')}</svg>`;
   return{svg,fits,need,s,tegning};}
+
+/* ---------- samlet tegningssæt ---------- */
+function setItems(){const L=[],sk=P.objs.some(o=>o.type==='skel'),hasW=geo().walls.length>0;
+  L.push({kind:'cover',nr:'A-000',name:'Forside og tegningsliste'});
+  if(sk&&hasW)L.push({kind:'site',nr:'A-100',name:'Situationsplan'});
+  floorsSorted().forEach((f,i)=>L.push({kind:'plan',arg:f.id,nr:'A-'+(101+i),name:P.floors.length>1?`Plan · ${f.name}`:'Plan'}));
+  if(hasW){const r=buildSheet('facades');if(r&&r.fits)L.push({kind:'facades',nr:'A-201',name:'Facader'});else['S','N','O','W'].forEach((k,i)=>L.push({kind:'facade',arg:k,nr:'A-'+(201+i),name:`Facade mod ${FACADES[k].n}`}));}
+  P.objs.filter(o=>o.type==='section').forEach((o,i)=>L.push({kind:'section',arg:o.id,nr:'A-'+(301+i),name:`Snit ${o.label}-${o.label}`}));
+  L.push({kind:'schedule',nr:'A-401',name:'Areal-, rum- og dagslysskema'});
+  const skip=P.set.setSkip||{};for(const it of L){it.key=it.kind+':'+(it.arg||'');it.on=!skip[it.key];it.scale=['cover','schedule'].includes(it.kind)?'':'1:'+viewScale(it.kind);}return L;}
+function textTable(p,x,y,cols,rows,opt={}){const rh=opt.rh||5.2,h=opt.h||2.4;let yy=y;
+  p.text('',{x,y},{h:1});cols.forEach(c=>p.text(c.t,{x:x+c.x+(c.r?c.w:0),y:yy+rh*0.7},{h:h*0.85,bold:true,anchor:c.r?'end':'start'}));yy+=rh;
+  const W=cols.reduce((m,c)=>Math.max(m,c.x+c.w),0);p.line({x,y:yy},{x:x+W,y:yy},{w:0.3});
+  for(const r of rows){if(opt.maxY&&yy+rh>opt.maxY)return{y:yy,cut:true};r.forEach((v,i)=>{const c=cols[i];p.text(String(v),{x:x+c.x+(c.r?c.w:0),y:yy+rh*0.72},{h,anchor:c.r?'end':'start',bold:!!(opt.boldLast&&r===rows[rows.length-1])});});yy+=rh;p.line({x,y:yy},{x:x+W,y:yy},{w:0.12});}
+  return{y:yy};}
+function paperSheet(kind,opt={}){const {W,H}=paperDims(),F=frameRect(W,H),sp=new SVGPainter(EXPORT_PAL);sp.u=1;sp.setLayer({color:null});const M=P.meta,x0=F.x+12,top=F.y+16,f1=v=>v.toFixed(1).replace('.',',');let tegning;
+  if(kind==='cover'){tegning='Forside og tegningsliste';
+    sp.text(M.projekt||'Projekt',{x:x0,y:top+6},{h:9,bold:true});sp.text([M.adresse,M.matr?'Matr.nr. '+M.matr:''].filter(Boolean).join(' · '),{x:x0,y:top+16},{h:4});
+    sp.text(`Bygherre: ${M.bygherre||'–'}   ·   Dato: ${M.dato||''}   ·   Rev. ${M.rev||'-'}`,{x:x0,y:top+24},{h:3});
+    sp.text('TEGNINGSLISTE',{x:x0,y:top+40},{h:2.6,bold:true});
+    const items=setItems().filter(i=>i.on);textTable(sp,x0,top+43,[{t:'Nr.',x:0,w:22},{t:'Tegning',x:24,w:100},{t:'Mål',x:126,w:22}],items.map(i=>[i.nr,i.name,i.scale]));
+    const a=areaSummary(),sc=siteCheck(),kx=x0+170;sp.text('NØGLETAL',{x:kx,y:top+40},{h:2.6,bold:true});
+    const rows=[['Grundareal',f1(a.grund)+' m²'],['Bebygget areal',f1(a.bebygget)+' m²'],['Etageareal',f1(a.etageareal)+' m²'],['Bebyggelsesprocent',f1(a.pct)+' %'],['Antal etager',String(P.floors.filter(f=>f.counts!==false).length)]];
+    if(sc.has){rows.push(['Højeste punkt over terræn',(sc.maxH/1000).toFixed(2).replace('.',',')+' m']);rows.push(['Mindste afstand til skel',(sc.minD/1000).toFixed(2).replace('.',',')+' m']);}
+    if(kx+100<F.x+F.w)textTable(sp,kx,top+43,[{t:'',x:0,w:60},{t:'',x:62,w:36,r:true}],rows);}
+  else{tegning='Areal-, rum- og dagslysskema';sp.text(tegning,{x:x0,y:top+4},{h:5,bold:true});
+    const D=[...daylight().values()].sort((a,b)=>floorZ(a.o.floor)-floorZ(b.o.floor));
+    const rows=D.map(d=>[d.o.name,floorById(d.o.floor).name,f1(d.area),d.eff.toFixed(2).replace('.',','),d.need?f1(d.pct)+' %':'–',d.need?(d.ok?'OK':'Under 10 %'):'Intet krav']);
+    rows.push(['I alt','',f1(D.reduce((s,d)=>s+d.area,0)),D.reduce((s,d)=>s+d.eff,0).toFixed(2).replace('.',','),'','']);
+    const r1=textTable(sp,x0,top+10,[{t:'Rum',x:0,w:46},{t:'Etage',x:48,w:30},{t:'Netto m²',x:80,w:20,r:true},{t:'Glas m²',x:102,w:20,r:true},{t:'Dagslys',x:124,w:20,r:true},{t:'Status',x:148,w:28}],rows,{maxY:F.y+F.h-50,boldLast:true});
+    const a=areaSummary(),kx=x0+190;if(kx+90<F.x+F.w){sp.text('AREALER',{x:kx,y:top+8},{h:2.6,bold:true});
+      const ar=[...floorsSorted().filter(f=>a.per.has(f.id)).map(f=>['Etageareal, '+f.name,f1(a.per.get(f.id))+' m²'])];if(a.sum.sekundaer)ar.push([`Carport/udhus (−${a.fr} m²)`,f1(a.secCounted)+' m²']);
+      ar.push(['Etageareal i alt',f1(a.etageareal)+' m²'],['Bebygget areal',f1(a.bebygget)+' m²'],['Grundareal',f1(a.grund)+' m²'],['Bebyggelsesprocent',f1(a.pct)+' %']);
+      textTable(sp,kx,top+10,[{t:'',x:0,w:56},{t:'',x:58,w:30,r:true}],ar);}
+    sp.text(`Dagslys: glasareal i forhold til gulvareal (BR18 § 379, 10 %-reglen). Glas anslået ud fra hulmål minus karm og poster, lystransmittans ${String(P.set.lt||0.75).replace('.',',')}. Skygge er ikke medregnet.`,{x:x0,y:Math.min(r1.y+8,F.y+F.h-48)},{h:2});}
+  const shp=new SVGPainter(EXPORT_PAL);shp.u=1;drawSheet(shp,W,H,tegning,'none',null,opt.nr);
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}mm" height="${H}mm" viewBox="0 0 ${W} ${H}"><rect x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>${sp.o.join('')}${shp.o.join('')}</svg>`;
+  return{svg,fits:true,need:null,s:null,tegning};}
+async function svgToDoc(doc,svg,W,H){const holder=document.createElement('div');holder.style.cssText='position:fixed;left:-10000px;top:0;width:10px;height:10px;overflow:hidden';holder.innerHTML=svg;document.body.appendChild(holder);const el=holder.querySelector('svg');
+  try{if(doc.svg)await doc.svg(el,{x:0,y:0,width:W,height:H});else if(window.svg2pdf&&window.svg2pdf.svg2pdf)await window.svg2pdf.svg2pdf(el,doc,{x:0,y:0,width:W,height:H});else await window.svg2pdf(el,doc,{x:0,y:0,width:W,height:H});}finally{holder.remove();}}
+async function exportSet(){const items=setItems().filter(i=>i.on);if(!items.length)return toast('Vælg mindst én tegning.');toast(`Laver tegningssæt med ${items.length} ark …`);
+  try{await ensurePDF();const {W,H}=paperDims(),o=W>H?'landscape':'portrait',fmt=P.set.paper.toLowerCase(),doc=new window.jspdf.jsPDF({orientation:o,unit:'mm',format:fmt,compress:true});const warns=[];
+    for(let i=0;i<items.length;i++){const it=items[i],r=buildSheet(it.kind,it.arg,{nr:it.nr});if(!r)continue;if(!r.fits)warns.push(it.nr);if(i>0)doc.addPage(fmt,o);await svgToDoc(doc,r.svg,W,H);}
+    doc.setProperties({title:`${P.meta.projekt} – tegningssæt`,creator:'Tilbygning CAD'});doc.save(`${fileBase()}-tegningssaet-${P.set.paper}.pdf`);
+    toast(`Tegningssættet er gemt: ${items.length} ark på ${P.set.paper}.`+(warns.length?` Bemærk: ${warns.join(', ')} er større end arket – ret målestok eller ark.`:''));}
+  catch(err){console.error(err);toast('PDF kræver internet første gang (henter PDF-modulet). Prøv igen.');}}
+function setListHTML(){const it=setItems();return`<div class="setlist"><table class="area"><thead><tr><th></th><th>Nr.</th><th>Tegning</th><th style="text-align:right">Mål</th></tr></thead><tbody>${it.map(i=>`<tr><td><input type="checkbox" data-act="setinc" data-k="${i.key}"${i.on?' checked':''} aria-label="Medtag ${esc(i.name)}"></td><td>${i.nr}</td><td><a href="#" data-act="setshow" data-kind="${i.kind}" data-arg="${i.arg||''}">${esc(i.name)}</a></td><td class="n">${i.scale}</td></tr>`).join('')}</tbody></table>
+  <div class="btns" style="margin-top:8px">${btn(`Lav PDF med ${it.filter(i=>i.on).length} ark`,'setpdf','','btn acc')}</div><p class="note">Alle ark får samme papirformat (${P.set.paper}) og fortløbende tegningsnumre. Målestok for hver slags tegning vælges på den enkelte tegning.</p></div>`;}
 function viewFileName(kind,arg){if(kind==='plan')return P.floors.length>1?'plan-'+floorById(arg||P.curFloor).name.toLowerCase().replace(/[^a-z0-9æøå]+/g,'-'):'plan';if(kind==='site')return'situationsplan';if(kind==='facades')return'facader';if(kind==='facade')return'facade-'+FACADES[arg].n;const sec=objById(arg);return'snit-'+(sec?sec.label:'');}
 function fitMsg(r){if(!r||r.fits)return'';return r.need?`Tegningen er større end arket. Vælg 1:${r.need} eller et større ark.`:'Tegningen er større end arket. Vælg et større ark.';}
 function openView(kind,arg){if(kind==='facade'&&!arg)arg='S';S.view={kind,arg};renderView();$('#secModal').hidden=false;}
@@ -1938,7 +2036,10 @@ function renderView(){const v=S.view;if(!v)return;
   const secs=P.objs.filter(o=>o.type==='section'),tb=(l,k,a,on)=>`<button data-act="view" data-kind="${k}" data-arg="${a||''}" class="${on?'on':''}">${l}</button>`;
   let t=`<span>Planer</span>`+floorsSorted().slice().reverse().map(f=>tb(esc(f.name),'plan',f.id,v.kind==='plan'&&(v.arg||P.curFloor)===f.id)).join('')+`<span>Situation</span>`+tb('Situationsplan','site','',v.kind==='site')+`<span>Facader</span>`+['S','N','O','W'].map(k=>tb(FACADES[k].n[0].toUpperCase()+FACADES[k].n.slice(1),'facade',k,v.kind==='facade'&&v.arg===k)).join('')+tb('Alle fire','facades','',v.kind==='facades');
   if(secs.length)t+=`<span>Snit</span>`+secs.map(o=>tb(`${o.label}-${o.label}`,'section',o.id,v.kind==='section'&&v.arg===o.id)).join('');
-  $('#vtabs').innerHTML=t;const s=viewScale(v.kind);$('#vScale').innerHTML=SCALES.map(x=>`<option value="${x}"${x===s?' selected':''}>1:${x}</option>`).join('');
+  t+=`<span>Sæt</span>`+tb('Tegningssæt','set','',v.kind==='set');
+  $('#vtabs').innerHTML=t;
+  if(v.kind==='set'){$('#vScale').parentElement.hidden=true;const r=buildSheet('cover',null,{nr:'A-000'});$('#secTitle').textContent='Tegningssæt';$('#secBody').innerHTML=r.svg;$('#secNote').innerHTML=setListHTML();return;}
+  $('#vScale').parentElement.hidden=false;const s=viewScale(v.kind);$('#vScale').innerHTML=SCALES.map(x=>`<option value="${x}"${x===s?' selected':''}>1:${x}</option>`).join('');
   const r=buildSheet(v.kind,v.arg,{screen:true});
   $('#secTitle').textContent=r?r.tegning:'Tegninger';
   if(!r){$('#secBody').innerHTML=`<p class="note" style="padding:24px">${v.kind==='site'?'Tegn grunden med Skel-værktøjet (L) og bygningens vægge for at få en situationsplan.':v.kind==='section'?'Snitlinjen er for kort.':'Tegn vægge for at få facader.'}</p>`;$('#secNote').innerHTML='';return;}
@@ -1952,6 +2053,86 @@ function renderView(){const v=S.view;if(!v)return;
 $('#vScale').addEventListener('change',e=>{const v=S.view;if(!v)return;const x=+e.target.value;if(v.kind==='site')P.set.sitScale=x;else if(v.kind==='facade'||v.kind==='facades')P.set.facScale=x;else{P.set.scale=x;syncHeader();}commit();renderView();});
 function closeSection(){$('#secModal').hidden=true;S.view=null;}
 
+
+/* ====================================================================
+   3D-VISNING
+   ==================================================================== */
+async function ensureThree(){if(!window.THREE)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js');}
+const MAT3={mur:0xb0634b,beton:0xbab7b0,iso:0xe8e0c2,trae:0xc49a66,gips:0xf3f1ec,jord:0x8a7a5a,none:0xdddddd,tone:0xd2cdc5};
+const SYM3={komfur:900,ovn:900,koel:1850,fryser:1850,opvask:850,vask:900,bord:900,oe:900,toilet:420,haandvask:850,bruser:40,badekar:550,vaskemaskine:850,tumbler:850,skyllekar:850,braendeovn:1000,radiator:600,vp:700,seng2:500,seng1:500,sofa:800,laenestol:800,spisebord:750,rundbord:750,stol:900,garderobe:2100,reol:2000,skrivebord:750,tvbord:450,soejle:-1,skakt:-1};
+const SYMC3={kitchen:0xf1f1ef,bath:0xffffff,furn:0xcfc2ad,heat:0x3a3a3a,build:0xbab7b0};
+const V3={};
+function build3D(){const T=THREE,grp=new T.Group(),Sc=0.001,mats=new Map(),fl=V3.maxFloor,showRoof=V3.roof,showFurn=V3.furn;
+  const fz=id=>floorZ(id),okF=id=>fz(id)<=fl+1;
+  const mat=(hex,o={})=>{const k=hex+JSON.stringify(o);if(!mats.has(k))mats.set(k,new T.MeshStandardMaterial(Object.assign({color:hex,roughness:.9,metalness:0,side:T.DoubleSide},o)));return mats.get(k);};
+  const P3=(p,z)=>[p.x*Sc,z*Sc,p.y*Sc];
+  function prism(pts0,zb,zt,m){const pts=dedupePts(pts0);if(pts.length<3||Math.abs(polyArea(pts))<10)return;let tri;try{tri=T.ShapeUtils.triangulateShape(pts.map(q=>new T.Vector2(q.x,q.y)),[]);}catch(e){return;}
+    const pos=[];for(const [a,b,c] of tri){pos.push(...P3(pts[a],zt(pts[a])),...P3(pts[b],zt(pts[b])),...P3(pts[c],zt(pts[c])),...P3(pts[a],zb(pts[a])),...P3(pts[c],zb(pts[c])),...P3(pts[b],zb(pts[b])));}
+    for(let i=0;i<pts.length;i++){const a=pts[i],b=pts[(i+1)%pts.length],a0=P3(a,zb(a)),a1=P3(a,zt(a)),b0=P3(b,zb(b)),b1=P3(b,zt(b));pos.push(...a0,...b0,...b1,...a0,...b1,...a1);}
+    const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(pos,3));g.computeVertexNormals();const me=new T.Mesh(g,m);me.castShadow=true;me.receiveShadow=true;grp.add(me);}
+  const G=geo(),RL=roofsList(),zT=P.set.terrain;let bb=null;const grow=(p,z)=>{if(!bb)bb={x0:p.x,x1:p.x,y0:p.y,y1:p.y,z0:z,z1:z};else{bb.x0=Math.min(bb.x0,p.x);bb.x1=Math.max(bb.x1,p.x);bb.y0=Math.min(bb.y0,p.y);bb.y1=Math.max(bb.y1,p.y);bb.z0=Math.min(bb.z0,z);bb.z1=Math.max(bb.z1,z);}};
+  for(const g of G.walls){const Ly=layerById(g.w.layer);if(!Ly||!Ly.visible||!okF(g.floor))continue;const z0=g.floor===floorsSorted()[0].id&&g.z0<=0?Math.min(g.z0,zT):g.z0;
+    const top=q=>{const sv=clamp(V.dot(V.sub(q,g.w.a),g.u),0,g.L);return wallTopAt(g,wpt(g,sv,0),RL);};
+    for(const pc of g.pieces){const m=mat(Ly.style==='tone'?MAT3.tone:(MAT3[pc.mat]||MAT3.none));
+      if(pc.kind==='solid'){prism(pc.poly,()=>z0,top,m);pc.poly.forEach(q=>{grow(q,z0);grow(q,top(q));});}
+      else{const o=pc.op;if(o.kind==='window'){const s=g.z0+(o.sill||0),h=s+(o.height||1300);if(s>z0)prism(pc.poly,()=>z0,()=>s,m);prism(pc.poly,()=>h,q=>Math.max(h,top(q)),m);}
+        else{const h=g.z0+(o.height||2100);if(z0<g.z0)prism(pc.poly,()=>z0,()=>g.z0,m);prism(pc.poly,()=>h,q=>Math.max(h,top(q)),m);}}}}
+  const glass=mat(0x8fb7cf,{transparent:true,opacity:.42,roughness:.1,metalness:.2}),wood=mat(0x7b5a3c),frame=mat(0xf4f4f2);
+  for(const og of G.opens.values()){const g=og.g,o=og.o,Ly=layerById(o.layer);if(!Ly||!Ly.visible||!okF(g.floor))continue;
+    const zb=g.z0+(o.kind==='window'?(o.sill||0):0),zt=zb+(o.height||(o.kind==='window'?1300:2100));
+    const pane=(d0,d1,s0,s1)=>[wpt(g,s0,d0),wpt(g,s1,d0),wpt(g,s1,d1),wpt(g,s0,d1)];
+    prism(pane(25,-25,og.s0,og.s1),()=>zb,()=>zt,isGlazed(o)?glass:wood);
+    for(const [a,b] of [[og.s0,og.s0+60],[og.s1-60,og.s1]])prism(pane(35,-35,a,b),()=>zb,()=>zt,frame);
+    prism(pane(35,-35,og.s0,og.s1),()=>zt-60,()=>zt,frame);if(o.kind==='window')prism(pane(35,-35,og.s0,og.s1),()=>zb,()=>zb+60,frame);}
+  for(const o of P.objs){if(o.type!=='room'||o.cat!=='netto'||!okF(o.floor))continue;const r=G.rooms.get(o.id);if(!r)continue;const z=fz(o.floor)+(o.kote||0),low=fz(o.floor)<=lowestFloorZ()+1;
+    prism(r.poly,()=>z-(low?150:250),()=>z,mat(low?0xd8d2c6:0xcdb48e));}
+  if(showRoof)for(const R of RL){if(!okF(R.floor))continue;const m=mat(R.r.kind==='flad'?0x5d6166:0x6e4c42);for(const prt of roofParts(R)){prism(prt.pts,q=>R.zf(q),q=>R.zf(q)+R.th,m);prt.pts.forEach(q=>grow(q,R.zf(q)+R.th));}}
+  if(showFurn)for(const o of P.objs){if(o.type!=='sym'||!okF(o.floor))continue;const D=SYMS[o.k];let h=SYM3[o.k];if(h==null||!D)continue;const z=fz(o.floor);if(h<0)h=floorH(o.floor);prism(symCorners(o),()=>z,()=>z+h,mat(SYMC3[D.cat]||0xdddddd));}
+  for(const o of P.objs){if(o.type!=='hatch'||!LV(o.layer)||!okF(o.floor))continue;prism(o.pts,()=>zT,()=>zT+40,mat(o.mat==='trae'?0xb08a5c:0xc9c4ba));}
+  if(!bb)return null;
+  const cx=(bb.x0+bb.x1)/2,cy=(bb.y0+bb.y1)/2,R=Math.max(bb.x1-bb.x0,bb.y1-bb.y0,6000);
+  const gr=new T.Mesh(new T.PlaneGeometry(R*Sc*12,R*Sc*12),mat(0x9fb47e,{side:T.FrontSide}));gr.rotation.x=-Math.PI/2;gr.position.set(cx*Sc,zT*Sc-0.002,cy*Sc);gr.receiveShadow=true;grp.add(gr);
+  for(const o of P.objs){if(o.type!=='skel'||!o.pts||o.pts.length<3)continue;const pts=o.pts.concat([o.pts[0]]).map(q=>new T.Vector3(q.x*Sc,zT*Sc+0.01,q.y*Sc));grp.add(new T.Line(new T.BufferGeometry().setFromPoints(pts),new T.LineDashedMaterial({color:0x7a2f2f,dashSize:.6,gapSize:.25})).computeLineDistances());}
+  return{grp,c:{x:cx*Sc,y:((bb.z0+bb.z1)/2)*Sc,z:cy*Sc},R:R*Sc,bb};}
+function g3fill(){const sel=$('#g3floor'),fs=floorsSorted();sel.innerHTML=fs.slice().reverse().map(f=>`<option value="${f.z}"${f.z===V3.maxFloor?' selected':''}>${fs.length>1?'Til og med '+esc(f.name):'Alle'}</option>`).join('');}
+function g3rebuild(){const T=THREE;if(V3.model){V3.scene.remove(V3.model.grp);V3.model.grp.traverse(o=>{if(o.geometry)o.geometry.dispose();});}
+  V3.model=build3D();const msg=$('#g3msg');if(!V3.model){msg.hidden=false;msg.textContent='Der er intet at vise endnu. Tegn vægge først.';return;}msg.hidden=true;V3.scene.add(V3.model.grp);g3sun();}
+function g3sun(){if(!V3.model)return;const a=V3.sun*DEG,el=40*DEG,R=V3.model.R*1.6,c=V3.model.c,L=V3.light;
+  L.position.set(c.x+Math.sin(a)*Math.cos(el)*R,c.y+Math.sin(el)*R,c.z+Math.cos(a)*Math.cos(el)*R);L.target.position.set(c.x,c.y,c.z);L.target.updateMatrixWorld();
+  const sc=L.shadow.camera,e=V3.model.R*1.2;sc.left=-e;sc.right=e;sc.top=e;sc.bottom=-e;sc.near=.1;sc.far=R*4;sc.updateProjectionMatrix();}
+function g3cam(){const c=V3.model?V3.model.c:{x:0,y:0,z:0},o=V3.orb,t=o.t;const x=t.x+o.r*Math.sin(o.ph)*Math.sin(o.th),y=t.y+o.r*Math.cos(o.ph),z=t.z+o.r*Math.sin(o.ph)*Math.cos(o.th);V3.cam.position.set(x,y,z);V3.cam.lookAt(t.x,t.y,t.z);}
+function g3preset(v){if(!V3.model)return;const c=V3.model.c,R=V3.model.R,o=V3.orb;o.t={...c};
+  const P_={iso:[-35,58,1.9],S:[0,82,1.7],N:[180,82,1.7],O:[90,82,1.7],W:[-90,82,1.7]}[v]||[-35,58,1.9];o.th=P_[0]*DEG;o.ph=P_[1]*DEG;o.r=R*P_[2];g3cam();}
+async function open3D(){$('#m3d').hidden=false;const msg=$('#g3msg');msg.hidden=false;msg.textContent='Indlæser 3D …';
+  try{await ensureThree();}catch(e){msg.textContent='3D kræver internet første gang (henter 3D-modulet). Prøv igen, når du er online.';return;}
+  const T=THREE,wrap=$('#g3wrap');
+  if(!V3.renderer){V3.renderer=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});V3.renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));V3.renderer.shadowMap.enabled=true;V3.renderer.shadowMap.type=T.PCFSoftShadowMap;
+    if(T.sRGBEncoding)V3.renderer.outputEncoding=T.sRGBEncoding;wrap.appendChild(V3.renderer.domElement);
+    V3.scene=new T.Scene();V3.scene.background=new T.Color(0xe4ecf3);V3.scene.fog=new T.Fog(0xe4ecf3,80,260);
+    V3.scene.add(new T.HemisphereLight(0xf2f6ff,0x8a8f7a,.75));const L=new T.DirectionalLight(0xfff4e2,.95);L.castShadow=true;L.shadow.mapSize.set(2048,2048);L.shadow.bias=-0.0005;V3.scene.add(L);V3.scene.add(L.target);V3.light=L;
+    V3.cam=new T.PerspectiveCamera(42,1,.05,2000);V3.orb={th:0,ph:1,r:30,t:{x:0,y:0,z:0}};V3.sun=200;V3.roof=true;V3.furn=true;
+    const el=V3.renderer.domElement,pt=new Map();let drag=null,pinch=null;
+    el.addEventListener('contextmenu',e=>e.preventDefault());
+    el.addEventListener('pointerdown',e=>{el.setPointerCapture(e.pointerId);pt.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pt.size===2){const [a,b]=[...pt.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),r:V3.orb.r};drag=null;return;}
+      drag={x:e.clientX,y:e.clientY,pan:e.button===2||e.shiftKey,th:V3.orb.th,ph:V3.orb.ph,t:{...V3.orb.t}};el.style.cursor='grabbing';});
+    el.addEventListener('pointermove',e=>{if(pt.has(e.pointerId))pt.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(pinch&&pt.size===2){const [a,b]=[...pt.values()];V3.orb.r=clamp(pinch.r*pinch.d/Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),1,800);g3cam();return;}
+      if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y,o=V3.orb;
+      if(drag.pan){const k=o.r/600,f=new T.Vector3(),r=new T.Vector3(),up=new T.Vector3(0,1,0);V3.cam.getWorldDirection(f);r.crossVectors(f,up).normalize();const u=new T.Vector3().crossVectors(r,f).normalize();
+        o.t={x:drag.t.x-r.x*dx*k+u.x*dy*k,y:drag.t.y-r.y*dx*k+u.y*dy*k,z:drag.t.z-r.z*dx*k+u.z*dy*k};}
+      else{o.th=drag.th-dx*0.008;o.ph=clamp(drag.ph-dy*0.008,0.08,Math.PI/2-0.01);}g3cam();});
+    const up=e=>{pt.delete(e.pointerId);if(pt.size<2)pinch=null;drag=null;el.style.cursor='grab';};el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up);
+    el.addEventListener('wheel',e=>{e.preventDefault();V3.orb.r=clamp(V3.orb.r*Math.pow(1.0012,e.deltaY*(e.deltaMode?30:1)),1,800);g3cam();},{passive:false});
+    new ResizeObserver(()=>g3size()).observe(wrap);
+    $('#g3floor').addEventListener('change',e=>{V3.maxFloor=+e.target.value;g3rebuild();});
+    $('#g3roof').addEventListener('change',e=>{V3.roof=e.target.checked;g3rebuild();});
+    $('#g3furn').addEventListener('change',e=>{V3.furn=e.target.checked;g3rebuild();});
+    $('#g3sun').addEventListener('input',e=>{V3.sun=+e.target.value;g3sun();});}
+  V3.maxFloor=Math.max(...P.floors.map(f=>f.z));g3fill();g3rebuild();g3size();g3preset('iso');
+  V3.renderer.setAnimationLoop(()=>V3.renderer.render(V3.scene,V3.cam));}
+function g3size(){if(!V3.renderer)return;const w=$('#g3wrap'),W=w.clientWidth||800,H=w.clientHeight||500;V3.renderer.setSize(W,H,false);V3.renderer.domElement.style.width='100%';V3.renderer.domElement.style.height='100%';V3.cam.aspect=W/H;V3.cam.updateProjectionMatrix();}
+function close3D(){$('#m3d').hidden=true;if(V3.renderer)V3.renderer.setAnimationLoop(null);}
+function g3png(){if(!V3.renderer)return;V3.renderer.render(V3.scene,V3.cam);V3.renderer.domElement.toBlob(b=>{if(b){download(`${fileBase()}-3d.png`,b);toast('Billedet er gemt.');}});}
 /* ====================================================================
    EKSPORT OG IMPORT
    ==================================================================== */
