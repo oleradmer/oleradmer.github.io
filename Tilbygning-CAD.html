@@ -1401,7 +1401,15 @@ function computeHoverOp(w){const G=geo(),kind=S.tool;let best=null;
   for(const g of G.walls){if(!editable(g.w))continue;const rel=V.sub(w,g.w.a),r=V.dot(rel,g.u),pd=Math.abs(V.dot(rel,g.n));if(r<0||r>g.L||pd>g.t/2+14/view.zoom)continue;if(!best||pd<best.pd)best={g,r,pd};}
   if(!best)return null;const g=best.g,l=g.offs.length-1,lo=Math.max(g.sA[0],g.sA[l]),hi=Math.min(g.sB[0],g.sB[l]),wid=Math.min(P.set.opW[kind],hi-lo);if(wid<100)return null;
   let pos=Math.round(best.r/10)*10;pos=clamp(pos,lo+wid/2,hi-wid/2);return{g,pos,wid,lo,hi,dA:pos-wid/2-lo,dB:hi-pos-wid/2};}
-function placeOpening(h,pos){if(!h)return toast('Peg på en væg for at placere åbningen.');const k=S.tool;
+function whyNoWall(){const w=S.cur?S.cur.p:null;if(!w)return'Peg på en væg for at placere åbningen.';const tol=14/view.zoom;
+  for(const g of geo().walls){const rel=V.sub(w,g.w.a),r=V.dot(rel,g.u),pd=Math.abs(V.dot(rel,g.n));if(r<0||r>g.L||pd>g.t/2+tol)continue;
+    const L=layerById(g.w.layer);if(!onFloor(g.w))return`Væggen ligger på ${floorById(g.w.floor).name}. Skift etage i toppen for at sætte vinduer i den.`;
+    if(L&&L.locked)return`Væggen ligger på laget "${L.name}", som er låst. Lås laget op under Lag.`;if(L&&!L.visible)return`Væggen ligger på et skjult lag.`;
+    const l=g.offs.length-1;if(Math.min(g.sB[0],g.sB[l])-Math.max(g.sA[0],g.sA[l])<100)return'Væggen er for kort til en åbning.';}
+  const id=hitTest(w,tol);const o=id&&objById(id);
+  if(o&&o.type!=='wall')return`Det er ${o.type==='pline'?'en linje (polylinje eller rektangel)':'et objekt af typen '+(TYPE_N[o.type]||o.type).toLowerCase()}, ikke en væg. Vinduer og døre kan kun sættes i vægge – tegn væggen med Væg-værktøjet (W).`;
+  return'Peg på en væg for at placere åbningen.';}
+function placeOpening(h,pos){if(!h)return toast(whyNoWall());const k=S.tool;
   addObj({type:'opening',wall:h.g.w.id,kind:k,pos:pos??h.pos,width:h.wid,height:P.set.opH[k],sill:k==='window'?P.set.sill:0,hinge:'L',swing:1,style:k==='door'?((P.set.opStyle||{}).door||'single'):undefined,panes:k==='window'?((P.set.opStyle||{}).window||2):undefined,layer:h.g.w.layer});commit();}
 
 /* ---------- værktøjslogik ---------- */
