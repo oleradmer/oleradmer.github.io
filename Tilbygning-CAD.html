@@ -262,6 +262,7 @@ table.area tfoot td{font-weight:700;border-bottom:0}
       <label class="hsel">Etager <select id="g3floor" aria-label="Vis etager op til"></select></label>
       <label class="hsel"><input type="checkbox" id="g3roof" checked> Tag</label>
       <label class="hsel"><input type="checkbox" id="g3furn" checked> Inventar</label>
+      <label class="hsel">Tagfarve <select id="g3rc" aria-label="Tagfarve"><option value="tegl">Rød tegl</option><option value="sort">Sort</option><option value="graa">Grå</option><option value="zink">Zink</option></select></label>
       <label class="hsel">Sol <input type="range" id="g3sun" min="0" max="360" step="5" value="200" aria-label="Solens retning"></label>
       <button class="btn" data-act="g3png">Gem billede</button>
       <button class="btn" data-act="g3close">Luk</button></div>
@@ -2087,13 +2088,14 @@ function closeSection(){$('#secModal').hidden=true;S.view=null;}
    3D-VISNING
    ==================================================================== */
 async function ensureThree(){if(!window.THREE)await loadScript('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js');}
-const MAT3={mur:0xb0634b,beton:0xbab7b0,iso:0xe8e0c2,trae:0xc49a66,gips:0xf3f1ec,jord:0x8a7a5a,none:0xdddddd,tone:0xd2cdc5};
+const MAT3={mur:0xb9603f,beton:0xa9a7a2,iso:0xe9d98f,trae:0xb7773a,gips:0xf5f3ee,jord:0x7a6343,none:0xd8d8d8,tone:0xbdb8b0};
+const ROOF3={tegl:0x7c2416,sort:0x2c2f35,graa:0x6b7076,zink:0x9aa3aa};
 const SYM3={komfur:900,ovn:900,koel:1850,fryser:1850,opvask:850,vask:900,bord:900,oe:900,toilet:420,haandvask:850,bruser:40,badekar:550,vaskemaskine:850,tumbler:850,skyllekar:850,braendeovn:1000,radiator:600,vp:700,seng2:500,seng1:500,sofa:800,laenestol:800,spisebord:750,rundbord:750,stol:900,garderobe:2100,reol:2000,skrivebord:750,tvbord:450,soejle:-1,skakt:-1};
-const SYMC3={kitchen:0xf1f1ef,bath:0xffffff,furn:0xcfc2ad,heat:0x3a3a3a,build:0xbab7b0};
+const SYMC3={kitchen:0xf4f4f2,bath:0xffffff,furn:0x3f6fa8,heat:0x2a2a2a,build:0xa9a7a2};
 const V3={};
 function build3D(){const T=THREE,grp=new T.Group(),Sc=0.001,mats=new Map(),fl=V3.maxFloor,showRoof=V3.roof,showFurn=V3.furn;
   const fz=id=>floorZ(id),okF=id=>fz(id)<=fl+1;
-  const mat=(hex,o={})=>{const k=hex+JSON.stringify(o);if(!mats.has(k))mats.set(k,new T.MeshStandardMaterial(Object.assign({color:hex,roughness:.9,metalness:0,side:T.DoubleSide},o)));return mats.get(k);};
+  const mat=(hex,o={})=>{const k=hex+JSON.stringify(o);if(!mats.has(k)){const m=new T.MeshStandardMaterial(Object.assign({color:hex,roughness:.85,metalness:0,side:T.DoubleSide},o));if(m.color.convertSRGBToLinear)m.color.convertSRGBToLinear();mats.set(k,m);}return mats.get(k);};
   const P3=(p,z)=>[p.x*Sc,z*Sc,p.y*Sc];
   function prism(pts0,zb,zt,m){const pts=dedupePts(pts0);if(pts.length<3||Math.abs(polyArea(pts))<10)return;let tri;try{tri=T.ShapeUtils.triangulateShape(pts.map(q=>new T.Vector2(q.x,q.y)),[]);}catch(e){return;}
     const pos=[];for(const [a,b,c] of tri){pos.push(...P3(pts[a],zt(pts[a])),...P3(pts[b],zt(pts[b])),...P3(pts[c],zt(pts[c])),...P3(pts[a],zb(pts[a])),...P3(pts[c],zb(pts[c])),...P3(pts[b],zb(pts[b])));}
@@ -2106,7 +2108,7 @@ function build3D(){const T=THREE,grp=new T.Group(),Sc=0.001,mats=new Map(),fl=V3
       if(pc.kind==='solid'){prism(pc.poly,()=>z0,top,m);pc.poly.forEach(q=>{grow(q,z0);grow(q,top(q));});}
       else{const o=pc.op;if(o.kind==='window'){const s=g.z0+(o.sill||0),h=s+(o.height||1300);if(s>z0)prism(pc.poly,()=>z0,()=>s,m);prism(pc.poly,()=>h,q=>Math.max(h,top(q)),m);}
         else{const h=g.z0+(o.height||2100);if(z0<g.z0)prism(pc.poly,()=>z0,()=>g.z0,m);prism(pc.poly,()=>h,q=>Math.max(h,top(q)),m);}}}}
-  const glass=mat(0x8fb7cf,{transparent:true,opacity:.42,roughness:.1,metalness:.2}),wood=mat(0x7b5a3c),frame=mat(0xf4f4f2);
+  const glass=mat(0x4f8fc0,{transparent:true,opacity:.55,roughness:.08,metalness:.3}),wood=mat(0x6b4426),frame=mat(0xffffff);
   for(const og of G.opens.values()){const g=og.g,o=og.o,Ly=layerById(o.layer);if(!Ly||!Ly.visible||!okF(g.floor))continue;
     const zb=g.z0+(o.kind==='window'?(o.sill||0):0),zt=zb+(o.height||(o.kind==='window'?1300:2100));
     const pane=(d0,d1,s0,s1)=>[wpt(g,s0,d0),wpt(g,s1,d0),wpt(g,s1,d1),wpt(g,s0,d1)];
@@ -2114,15 +2116,26 @@ function build3D(){const T=THREE,grp=new T.Group(),Sc=0.001,mats=new Map(),fl=V3
     for(const [a,b] of [[og.s0,og.s0+60],[og.s1-60,og.s1]])prism(pane(35,-35,a,b),()=>zb,()=>zt,frame);
     prism(pane(35,-35,og.s0,og.s1),()=>zt-60,()=>zt,frame);if(o.kind==='window')prism(pane(35,-35,og.s0,og.s1),()=>zb,()=>zb+60,frame);}
   for(const o of P.objs){if(o.type!=='room'||o.cat!=='netto'||!okF(o.floor))continue;const r=G.rooms.get(o.id);if(!r)continue;const z=fz(o.floor)+(o.kote||0),low=fz(o.floor)<=lowestFloorZ()+1;
-    prism(r.poly,()=>z-(low?150:250),()=>z,mat(low?0xd8d2c6:0xcdb48e));}
-  if(showRoof)for(const R of RL){if(!okF(R.floor))continue;const m=mat(R.r.kind==='flad'?0x5d6166:0x6e4c42);for(const prt of roofParts(R)){prism(prt.pts,q=>R.zf(q),q=>R.zf(q)+R.th,m);prt.pts.forEach(q=>grow(q,R.zf(q)+R.th));}}
+    prism(r.poly,()=>z-(low?150:250),()=>z,mat(low?0xc9b48f:0xc29a62));}
+  if(showRoof)for(const R of RL){if(!okF(R.floor))continue;const m=mat(R.r.kind==='flad'?0x4a4e54:(ROOF3[V3.roofCol||'tegl']||ROOF3.tegl));for(const prt of roofParts(R)){prism(prt.pts,q=>R.zf(q),q=>R.zf(q)+R.th,m);prt.pts.forEach(q=>grow(q,R.zf(q)+R.th));}}
   if(showFurn)for(const o of P.objs){if(o.type!=='sym'||!okF(o.floor))continue;const D=SYMS[o.k];let h=SYM3[o.k];if(h==null||!D)continue;const z=fz(o.floor);if(h<0)h=floorH(o.floor);prism(symCorners(o),()=>z,()=>z+h,mat(SYMC3[D.cat]||0xdddddd));}
-  for(const o of P.objs){if(o.type!=='hatch'||!LV(o.layer)||!okF(o.floor))continue;prism(o.pts,()=>zT,()=>zT+40,mat(o.mat==='trae'?0xb08a5c:0xc9c4ba));}
+  for(const o of P.objs){if(o.type!=='hatch'||!LV(o.layer)||!okF(o.floor))continue;prism(o.pts,()=>zT,()=>zT+40,mat(o.mat==='trae'?0xa36f3d:0xb9b3a8));}
   if(!bb)return null;
   const cx=(bb.x0+bb.x1)/2,cy=(bb.y0+bb.y1)/2,R=Math.max(bb.x1-bb.x0,bb.y1-bb.y0,6000);
-  const gr=new T.Mesh(new T.PlaneGeometry(R*Sc*12,R*Sc*12),mat(0x9fb47e,{side:T.FrontSide}));gr.rotation.x=-Math.PI/2;gr.position.set(cx*Sc,zT*Sc-0.002,cy*Sc);gr.receiveShadow=true;grp.add(gr);
+  const GS=Math.max(R*Sc*12,120),gm=new T.MeshStandardMaterial({map:grassTex(GS),roughness:1,metalness:0});const gr=new T.Mesh(new T.PlaneGeometry(GS,GS),gm);gr.rotation.x=-Math.PI/2;gr.position.set(cx*Sc,zT*Sc-0.002,cy*Sc);gr.receiveShadow=true;grp.add(gr);
   for(const o of P.objs){if(o.type!=='skel'||!o.pts||o.pts.length<3)continue;const pts=o.pts.concat([o.pts[0]]).map(q=>new T.Vector3(q.x*Sc,zT*Sc+0.01,q.y*Sc));grp.add(new T.Line(new T.BufferGeometry().setFromPoints(pts),new T.LineDashedMaterial({color:0x7a2f2f,dashSize:.6,gapSize:.25})).computeLineDistances());}
   return{grp,c:{x:cx*Sc,y:((bb.z0+bb.z1)/2)*Sc,z:cy*Sc},R:R*Sc,bb};}
+/* græs: tegnet mønster, der gentages hver 4 m */
+let GRASS=null;
+function grassTex(size){const T=THREE;if(!GRASS){const c=document.createElement('canvas');c.width=c.height=512;const x=c.getContext('2d');let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+    x.fillStyle='#4f8a2c';x.fillRect(0,0,512,512);
+    for(let i=0;i<180;i++){const r=25+rnd()*70,g=x.createRadialGradient(0,0,0,0,0,r),lt=rnd()<.5,cx=rnd()*512,cy=rnd()*512;g.addColorStop(0,lt?'rgba(110,160,55,.18)':'rgba(45,95,28,.18)');g.addColorStop(1,'rgba(0,0,0,0)');
+      for(const dx of [-512,0,512])for(const dy of [-512,0,512]){if(cx+dx+r<0||cx+dx-r>512||cy+dy+r<0||cy+dy-r>512)continue;x.save();x.translate(cx+dx,cy+dy);x.fillStyle=g;x.fillRect(-r,-r,2*r,2*r);x.restore();}}
+    const cols=['#3f7a22','#5c9a33','#6fae3c','#467f26','#7dba48','#355f1c'];
+    for(let i=0;i<9000;i++){const px=rnd()*512,py=rnd()*512,l=3+rnd()*7,a=-Math.PI/2+(rnd()-.5)*0.9;x.strokeStyle=cols[(rnd()*cols.length)|0];x.globalAlpha=.55+rnd()*.45;x.lineWidth=0.8+rnd()*1.2;x.beginPath();x.moveTo(px,py);x.lineTo(px+Math.cos(a)*l,py+Math.sin(a)*l);x.stroke();
+      for(const [dx,dy] of [[512,0],[-512,0],[0,512],[0,-512]]){if(px+dx>-10&&px+dx<522&&py+dy>-10&&py+dy<522){x.beginPath();x.moveTo(px+dx,py+dy);x.lineTo(px+dx+Math.cos(a)*l,py+dy+Math.sin(a)*l);x.stroke();}}}
+    x.globalAlpha=1;GRASS=new T.CanvasTexture(c);GRASS.wrapS=GRASS.wrapT=T.RepeatWrapping;if(T.sRGBEncoding)GRASS.encoding=T.sRGBEncoding;if(V3.renderer)GRASS.anisotropy=V3.renderer.capabilities.getMaxAnisotropy();}
+  GRASS.repeat.set(size/4,size/4);return GRASS;}
 function g3fill(){const sel=$('#g3floor'),fs=floorsSorted();sel.innerHTML=fs.slice().reverse().map(f=>`<option value="${f.z}"${f.z===V3.maxFloor?' selected':''}>${fs.length>1?'Til og med '+esc(f.name):'Alle'}</option>`).join('');}
 function g3rebuild(){const T=THREE;if(V3.model){V3.scene.remove(V3.model.grp);V3.model.grp.traverse(o=>{if(o.geometry)o.geometry.dispose();});}
   V3.model=build3D();const msg=$('#g3msg');if(!V3.model){msg.hidden=false;msg.textContent='Der er intet at vise endnu. Tegn vægge først.';return;}msg.hidden=true;V3.scene.add(V3.model.grp);g3sun();}
@@ -2137,8 +2150,8 @@ async function open3D(){$('#m3d').hidden=false;const msg=$('#g3msg');msg.hidden=
   const T=THREE,wrap=$('#g3wrap');
   if(!V3.renderer){V3.renderer=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});V3.renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));V3.renderer.shadowMap.enabled=true;V3.renderer.shadowMap.type=T.PCFSoftShadowMap;
     if(T.sRGBEncoding)V3.renderer.outputEncoding=T.sRGBEncoding;wrap.appendChild(V3.renderer.domElement);
-    V3.scene=new T.Scene();V3.scene.background=new T.Color(0xe4ecf3);V3.scene.fog=new T.Fog(0xe4ecf3,80,260);
-    V3.scene.add(new T.HemisphereLight(0xf2f6ff,0x8a8f7a,.75));const L=new T.DirectionalLight(0xfff4e2,.95);L.castShadow=true;L.shadow.mapSize.set(2048,2048);L.shadow.bias=-0.0005;V3.scene.add(L);V3.scene.add(L.target);V3.light=L;
+    V3.scene=new T.Scene();V3.scene.background=new T.Color(0x9cc6ea);V3.scene.fog=new T.Fog(0xb9d6ee,120,420);
+    V3.scene.add(new T.HemisphereLight(0xdcecff,0x4d5e30,.6));const L=new T.DirectionalLight(0xfff1d8,1.25);L.castShadow=true;L.shadow.mapSize.set(2048,2048);L.shadow.bias=-0.0005;V3.scene.add(L);V3.scene.add(L.target);V3.light=L;
     V3.cam=new T.PerspectiveCamera(42,1,.05,2000);V3.orb={th:0,ph:1,r:30,t:{x:0,y:0,z:0}};V3.sun=200;V3.roof=true;V3.furn=true;
     const el=V3.renderer.domElement,pt=new Map();let drag=null,pinch=null;
     el.addEventListener('contextmenu',e=>e.preventDefault());
@@ -2156,6 +2169,7 @@ async function open3D(){$('#m3d').hidden=false;const msg=$('#g3msg');msg.hidden=
     $('#g3floor').addEventListener('change',e=>{V3.maxFloor=+e.target.value;g3rebuild();});
     $('#g3roof').addEventListener('change',e=>{V3.roof=e.target.checked;g3rebuild();});
     $('#g3furn').addEventListener('change',e=>{V3.furn=e.target.checked;g3rebuild();});
+    $('#g3rc').addEventListener('change',e=>{V3.roofCol=e.target.value;g3rebuild();});
     $('#g3sun').addEventListener('input',e=>{V3.sun=+e.target.value;g3sun();});}
   V3.maxFloor=Math.max(...P.floors.map(f=>f.z));g3fill();g3rebuild();g3size();g3preset('iso');
   V3.renderer.setAnimationLoop(()=>V3.renderer.render(V3.scene,V3.cam));}
